@@ -10,8 +10,7 @@ import {
   Compass,
   WifiOff,
   RotateCcw,
-  MapPin,
-  FileText
+  MapPin
 } from 'lucide-react';
 
 export default function GrievanceForm() {
@@ -70,17 +69,14 @@ export default function GrievanceForm() {
     };
 
     try {
-      // Save locally to Dexie first
       await db.grievances.add(grievanceRecord);
       setSubmittedUuid(clientUuid);
 
-      // Attempt background sync if connected
       if (navigator.onLine) {
         triggerSyncNow();
       }
     } catch (err) {
-      console.error('[GrievanceForm] Dexie error:', err);
-      setError('Failed to record grievance in local storage.');
+      setError('Failed to record grievance in device memory.');
     } finally {
       setIsSubmitting(false);
     }
@@ -89,35 +85,35 @@ export default function GrievanceForm() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {submittedUuid ? (
-        <div className="p-8 sm:p-12 rounded-3xl bg-slate-900/90 border border-teal-500/40 shadow-2xl space-y-6 text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-950">
-            <CheckCircle2 className="w-8 h-8" />
+        <div className="p-8 sm:p-10 rounded-xl bg-white border-2 border-[#16A34A] shadow-sm space-y-6 text-center">
+          <div className="w-16 h-16 rounded-full bg-[#DCFCE7] text-[#087443] flex items-center justify-center mx-auto border-2 border-[#16A34A]">
+            <CheckCircle2 className="w-9 h-9" />
           </div>
 
-          <div className="space-y-2 max-w-md mx-auto">
-            <h2 className="text-2xl font-extrabold text-white">
-              Grievance Registered Locally!
+          <div className="space-y-1 max-w-md mx-auto">
+            <h2 className="text-2xl font-extrabold text-[#172033]">
+              Grievance Registered Offline
             </h2>
-            <p className="text-sm text-slate-300">
-              Your issue regarding <span className="text-teal-300 font-semibold">{category}</span> has been saved offline and queued for automatic sync to district authorities.
+            <p className="text-sm text-[#334155]">
+              Your issue regarding <strong className="text-[#087443]">{category}</strong> has been saved locally and queued to sync to district authorities upon reconnection.
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 max-w-md mx-auto text-left text-xs space-y-2">
+          <div className="p-4 rounded-lg bg-[#F8F9FA] border border-[#CBD5E1] max-w-md mx-auto text-left text-xs space-y-2">
             <div className="flex justify-between">
-              <span className="text-slate-400">Grievance Ticket (UUID):</span>
-              <span className="font-mono text-teal-300">{submittedUuid.slice(0, 13)}...</span>
+              <span className="text-[#64748B]">Ticket Reference:</span>
+              <span className="font-mono font-bold text-[#172033]">{submittedUuid.slice(0, 13)}...</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Queue Status:</span>
-              <span className="font-semibold text-amber-400">Pending Sync</span>
+              <span className="text-[#64748B]">Queue Status:</span>
+              <span className="font-bold text-[#92400E]">Pending Automatic Sync</span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-4 justify-center pt-2">
             <Link
               to="/grievances/track"
-              className="px-6 py-3 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-500 flex items-center gap-2 shadow-lg shadow-teal-950 cursor-pointer"
+              className="min-h-[48px] px-6 py-3 rounded-lg text-xs font-bold text-white bg-[#087443] hover:bg-[#065f37] flex items-center gap-2 cursor-pointer shadow-sm"
             >
               <Compass className="w-4 h-4" />
               <span>Track Grievance Status</span>
@@ -129,7 +125,7 @@ export default function GrievanceForm() {
                 setDescription('');
                 setVillage('');
               }}
-              className="px-6 py-3 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+              className="min-h-[48px] px-6 py-3 rounded-lg text-xs font-bold text-[#172033] bg-white hover:bg-[#F1F5F9] border border-[#CBD5E1] flex items-center gap-2 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>File Another Grievance</span>
@@ -137,23 +133,23 @@ export default function GrievanceForm() {
           </div>
         </div>
       ) : (
-        <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-6 sm:p-10 shadow-2xl space-y-6">
-          <div className="border-b border-slate-800 pb-5 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+        <div className="rounded-xl bg-white border-2 border-[#CBD5E1] p-6 sm:p-10 shadow-sm space-y-6">
+          <div className="border-b border-[#E5E7EB] pb-5 space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#D97706]">
               <AlertTriangle className="w-4 h-4" />
               <span>Public Grievance Redressal Portal</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#172033]">
               Report a Civic or Village Issue
             </h1>
-            <p className="text-sm text-slate-400">
-              Submit your concern even during complete network blackouts. It will sync automatically as soon as your device finds mobile signal.
+            <p className="text-sm text-[#475569]">
+              Submit issues even without internet connection. Saved safely on your device and submitted automatically when network signal returns.
             </p>
           </div>
 
           {error && (
-            <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800 text-xs text-rose-300 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <div className="p-3.5 rounded-lg bg-[#FEE2E2] border border-[#DC2626] text-xs font-bold text-[#991B1B] flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 text-[#DC2626]" />
               <span>{error}</span>
             </div>
           )}
@@ -161,13 +157,13 @@ export default function GrievanceForm() {
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {/* Category Select */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Issue Category <span className="text-rose-400">*</span>
+              <label className="block text-xs font-bold text-[#172033] mb-1.5">
+                Issue Category <span className="text-[#DC2626]">*</span>
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:border-teal-500 text-sm"
+                className="w-full min-h-[48px] px-4 py-3 rounded-lg bg-white border-2 border-[#CBD5E1] text-[#172033] font-medium focus:outline-none focus:border-[#087443] text-sm"
               >
                 {categories.map((c) => (
                   <option key={c} value={c}>
@@ -179,62 +175,62 @@ export default function GrievanceForm() {
 
             {/* Village Name */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Village / Gram Panchayat / Taluk <span className="text-rose-400">*</span>
+              <label className="block text-xs font-bold text-[#172033] mb-1.5">
+                Village / Gram Panchayat / Taluk <span className="text-[#DC2626]">*</span>
               </label>
               <div className="relative">
-                <MapPin className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <MapPin className="w-4 h-4 text-[#64748B] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="e.g. Bilikere Gram Panchayat, Hunsur"
                   value={village}
                   onChange={(e) => setVillage(e.target.value)}
-                  className="w-full min-h-[48px] pl-10 pr-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500 text-sm"
+                  className="w-full min-h-[48px] pl-10 pr-4 py-3 rounded-lg bg-white border-2 border-[#CBD5E1] text-[#172033] placeholder-[#94A3B8] font-medium focus:outline-none focus:border-[#087443] text-sm"
                 />
               </div>
             </div>
 
             {/* Contact Phone */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-[#172033] mb-1.5">
                 Callback Mobile Number (Optional)
               </label>
               <input
                 type="tel"
-                placeholder="10-digit mobile number for SMS updates"
+                placeholder="10-digit mobile number for status alerts"
                 value={contactPhone}
                 onChange={(e) => setContactPhone(e.target.value)}
-                className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500 text-sm"
+                className="w-full min-h-[48px] px-4 py-3 rounded-lg bg-white border-2 border-[#CBD5E1] text-[#172033] placeholder-[#94A3B8] font-medium focus:outline-none focus:border-[#087443] text-sm"
               />
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Detailed Description of the Issue <span className="text-rose-400">*</span>
+              <label className="block text-xs font-bold text-[#172033] mb-1.5">
+                Detailed Description of the Issue <span className="text-[#DC2626]">*</span>
               </label>
               <textarea
                 rows={5}
-                placeholder="Describe what is wrong, exact location, how long the issue has persisted, and any relevant details..."
+                placeholder="Describe what is broken, location details, how long the issue has persisted..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full p-4 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500 text-sm"
+                className="w-full min-h-[120px] p-4 rounded-lg bg-white border-2 border-[#CBD5E1] text-[#172033] placeholder-[#94A3B8] font-medium focus:outline-none focus:border-[#087443] text-sm"
               />
             </div>
 
-            <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <WifiOff className="w-4 h-4 text-emerald-400" />
-                <span>Zero network required. Instant local IndexedDB save.</span>
+            <div className="pt-3 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#087443]">
+                <WifiOff className="w-4 h-4 text-[#087443]" />
+                <span>Zero network needed. Stored immediately on device.</span>
               </div>
 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-amber-600 to-teal-600 hover:from-amber-500 hover:to-teal-500 shadow-lg shadow-amber-950 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className="w-full sm:w-auto min-h-[48px] px-8 py-3.5 rounded-lg font-bold text-white bg-[#087443] hover:bg-[#065f37] border border-[#065f37] flex items-center justify-center gap-2 transition-colors cursor-pointer text-sm shadow-sm"
               >
                 <Send className="w-4 h-4" />
-                <span>{isSubmitting ? 'Recording Offline...' : 'Lodge Grievance'}</span>
+                <span>{isSubmitting ? 'Recording on Device...' : 'Lodge Grievance'}</span>
               </button>
             </div>
           </form>

@@ -14,7 +14,7 @@ export default function FormRenderer({ schema, initialData = {}, onSubmit, isSub
 
   if (!schema || !schema.fields) {
     return (
-      <div className="p-6 text-center text-slate-400 bg-slate-900/60 rounded-xl border border-slate-800">
+      <div className="p-6 text-center text-[#475569] bg-[#F8F9FA] rounded-lg border border-[#D1D5DB]">
         <p>No valid form schema found.</p>
       </div>
     );
@@ -91,10 +91,10 @@ export default function FormRenderer({ schema, initialData = {}, onSubmit, isSub
             >
               <label
                 htmlFor={`field-${field.id}`}
-                className="block text-sm font-semibold text-slate-200"
+                className="block text-sm font-bold text-[#172033]"
               >
                 {field.label}
-                {field.required && <span className="text-rose-400 ml-1">*</span>}
+                {field.required && <span className="text-[#DC2626] ml-1 font-bold">*</span>}
               </label>
 
               {/* Text / Number / Tel / Date inputs */}
@@ -107,10 +107,10 @@ export default function FormRenderer({ schema, initialData = {}, onSubmit, isSub
                   placeholder={field.placeholder || ''}
                   onChange={(e) => handleChange(field, e.target.value)}
                   onBlur={() => handleBlur(field)}
-                  className={`w-full min-h-[48px] px-4 py-3 rounded-xl bg-slate-900/90 border text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full min-h-[48px] px-4 py-3 rounded-lg bg-white border text-[#172033] placeholder-[#94A3B8] font-medium text-sm focus:outline-none transition-colors ${
                     errorMsg
-                      ? 'border-rose-500/80 focus:ring-rose-500/30'
-                      : 'border-slate-700/80 focus:border-teal-500 focus:ring-teal-500/20'
+                      ? 'border-[#DC2626] focus:ring-2 focus:ring-[#DC2626]/20'
+                      : 'border-[#94A3B8] focus:border-[#087443] focus:ring-2 focus:ring-[#087443]/20'
                   }`}
                 />
               )}
@@ -124,22 +124,22 @@ export default function FormRenderer({ schema, initialData = {}, onSubmit, isSub
                     value={formData[field.id] ?? ''}
                     onChange={(e) => handleChange(field, e.target.value)}
                     onBlur={() => handleBlur(field)}
-                    className={`w-full min-h-[48px] px-4 py-3 rounded-xl bg-slate-900/90 border text-slate-100 focus:outline-none focus:ring-2 transition-all appearance-none ${
+                    className={`w-full min-h-[48px] px-4 py-3 rounded-lg bg-white border text-[#172033] font-medium text-sm focus:outline-none transition-colors appearance-none ${
                       errorMsg
-                        ? 'border-rose-500/80 focus:ring-rose-500/30'
-                        : 'border-slate-700/80 focus:border-teal-500 focus:ring-teal-500/20'
+                        ? 'border-[#DC2626] focus:ring-2 focus:ring-[#DC2626]/20'
+                        : 'border-[#94A3B8] focus:border-[#087443] focus:ring-2 focus:ring-[#087443]/20'
                     }`}
                   >
-                    <option value="" disabled className="bg-slate-900 text-slate-500">
-                      Select an option
+                    <option value="" disabled className="text-[#94A3B8]">
+                      -- Select an option --
                     </option>
                     {field.options?.map((opt) => (
-                      <option key={opt.value} value={opt.value} className="bg-slate-900 text-slate-100">
+                      <option key={opt.value} value={opt.value} className="text-[#172033]">
                         {opt.label}
                       </option>
                     ))}
                   </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-[#475569]">
                     ▼
                   </div>
                 </div>
@@ -155,40 +155,41 @@ export default function FormRenderer({ schema, initialData = {}, onSubmit, isSub
                   placeholder={field.placeholder || ''}
                   onChange={(e) => handleChange(field, e.target.value)}
                   onBlur={() => handleBlur(field)}
-                  className={`w-full min-h-[100px] px-4 py-3 rounded-xl bg-slate-900/90 border text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full min-h-[100px] p-4 rounded-lg bg-white border text-[#172033] placeholder-[#94A3B8] font-medium text-sm focus:outline-none transition-colors ${
                     errorMsg
-                      ? 'border-rose-500/80 focus:ring-rose-500/30'
-                      : 'border-slate-700/80 focus:border-teal-500 focus:ring-teal-500/20'
+                      ? 'border-[#DC2626] focus:ring-2 focus:ring-[#DC2626]/20'
+                      : 'border-[#94A3B8] focus:border-[#087443] focus:ring-2 focus:ring-[#087443]/20'
                   }`}
                 />
               )}
 
               {/* Helper text or Error */}
               {errorMsg ? (
-                <p className="flex items-center gap-1.5 text-xs text-rose-400 mt-1">
-                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                <p className="flex items-center gap-1.5 text-xs font-bold text-[#991B1B] mt-1">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-[#DC2626]" />
                   <span>{errorMsg}</span>
                 </p>
               ) : field.helperText ? (
-                <p className="text-xs text-slate-400 mt-1">{field.helperText}</p>
+                <p className="text-xs text-[#64748B] mt-1">{field.helperText}</p>
               ) : null}
             </div>
           );
         })}
       </div>
 
-      <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>Offline safe: All submissions save locally to device storage instantly.</span>
+      <div className="pt-4 border-t border-[#D1D5DB] flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-xs font-semibold text-[#087443]">
+          <CheckCircle2 className="w-4 h-4 text-[#087443] flex-shrink-0" />
+          <span>Offline Ready: Data saves immediately to this device.</span>
         </div>
 
+        {/* High-Contrast Large Touch Target Primary Button */}
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full sm:w-auto min-h-[50px] px-8 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 active:scale-98 shadow-lg shadow-teal-900/40 focus:outline-none focus:ring-2 focus:ring-teal-400 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+          className="w-full sm:w-auto min-h-[48px] px-8 py-3 rounded-lg font-bold text-white bg-[#087443] hover:bg-[#065f37] active:bg-[#044427] border border-[#065f37] flex items-center justify-center gap-2 transition-colors cursor-pointer text-sm shadow-sm"
         >
-          <span>{isSubmitting ? 'Saving Locally...' : 'Submit Application'}</span>
+          <span>{isSubmitting ? 'Saving to Device...' : 'Submit Application'}</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>

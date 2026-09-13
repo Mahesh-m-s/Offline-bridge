@@ -7,7 +7,6 @@ import FormRenderer from '../components/FormRenderer';
 import {
   ArrowLeft,
   CheckCircle2,
-  CloudUpload,
   WifiOff,
   ClipboardList,
   AlertTriangle,
@@ -27,14 +26,12 @@ export default function ServiceForm() {
     const fetchSchema = async () => {
       setLoading(true);
       try {
-        // Try Dexie cached forms first
         let found = await db.cachedForms.get(serviceType);
         if (!found) {
           found = defaultServiceForms.find((f) => f.service_type === serviceType);
         }
         setSchema(found || null);
       } catch (err) {
-        console.error('[ServiceForm] Error fetching schema:', err);
         const fallback = defaultServiceForms.find((f) => f.service_type === serviceType);
         setSchema(fallback || null);
       } finally {
@@ -49,7 +46,6 @@ export default function ServiceForm() {
     setIsSubmitting(true);
     const clientUuid = uuidv4();
 
-    // Check logged in user
     let userId = null;
     try {
       const storedUser = localStorage.getItem('offlinebridge_user');
@@ -73,16 +69,14 @@ export default function ServiceForm() {
     };
 
     try {
-      // 1. Save to Dexie IndexedDB (Offline First guarantee)
       await db.submissions.add(submissionRecord);
       setSubmittedUuid(clientUuid);
 
-      // 2. Trigger background sync attempt if currently connected
       if (navigator.onLine) {
         triggerSyncNow();
       }
     } catch (err) {
-      console.error('[ServiceForm] Error storing submission in Dexie:', err);
+      console.error('[ServiceForm] Error storing submission:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -91,8 +85,8 @@ export default function ServiceForm() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <div className="inline-block w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm text-slate-400 mt-4">Loading form schema from offline cache...</p>
+        <div className="inline-block w-8 h-8 border-4 border-[#087443] border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm font-bold text-[#172033] mt-4">Loading form from device memory...</p>
       </div>
     );
   }
@@ -100,16 +94,16 @@ export default function ServiceForm() {
   if (!schema) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 text-center space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-rose-950/60 border border-rose-800 flex items-center justify-center text-rose-400 mx-auto">
+        <div className="w-16 h-16 rounded-lg bg-[#FEE2E2] border border-[#DC2626] flex items-center justify-center text-[#DC2626] mx-auto">
           <AlertTriangle className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-bold text-white">Service Not Found</h2>
-        <p className="text-sm text-slate-400">
-          The requested service "{serviceType}" does not exist in the offline forms catalog.
+        <h2 className="text-xl font-bold text-[#172033]">Service Not Found</h2>
+        <p className="text-sm text-[#475569]">
+          The requested service "{serviceType}" is not available.
         </p>
         <Link
           to="/services"
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 text-white hover:bg-slate-700"
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold bg-[#172033] text-white hover:bg-black"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Services</span>
@@ -120,84 +114,84 @@ export default function ServiceForm() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Back Button */}
+      {/* Back Link */}
       <Link
         to="/services"
-        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-teal-400 transition-colors"
+        className="inline-flex items-center gap-2 text-xs font-bold text-[#087443] hover:underline"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Back to All Services</span>
       </Link>
 
-      {/* Success Submission State */}
+      {/* Success Confirmation State */}
       {submittedUuid ? (
-        <div className="p-8 sm:p-12 rounded-3xl bg-slate-900/90 border border-teal-500/40 shadow-2xl space-y-6 text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-full bg-emerald-950/80 border border-emerald-500/60 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-950">
-            <CheckCircle2 className="w-8 h-8" />
+        <div className="p-8 sm:p-10 rounded-xl bg-white border-2 border-[#16A34A] shadow-sm space-y-6 text-center">
+          <div className="w-16 h-16 rounded-full bg-[#DCFCE7] text-[#087443] flex items-center justify-center mx-auto border-2 border-[#16A34A]">
+            <CheckCircle2 className="w-9 h-9" />
           </div>
 
-          <div className="space-y-2 max-w-lg mx-auto">
-            <h2 className="text-2xl font-extrabold text-white">
-              Application Saved Successfully!
+          <div className="space-y-1.5 max-w-lg mx-auto">
+            <h2 className="text-2xl font-extrabold text-[#172033]">
+              Application Recorded Successfully
             </h2>
-            <p className="text-sm text-slate-300">
-              Your application for <span className="font-semibold text-teal-300">{schema.title}</span> has been securely stored in your device's IndexedDB.
+            <p className="text-sm text-[#334155]">
+              Your application for <strong className="text-[#087443]">{schema.title}</strong> has been saved directly on this device.
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 max-w-md mx-auto text-left text-xs space-y-2">
+          <div className="p-4 rounded-lg bg-[#F8F9FA] border border-[#CBD5E1] max-w-md mx-auto text-left text-xs space-y-2">
             <div className="flex justify-between">
-              <span className="text-slate-400">Tracking Reference (UUID):</span>
-              <span className="font-mono text-teal-300">{submittedUuid.slice(0, 13)}...</span>
+              <span className="text-[#64748B]">Reference Number:</span>
+              <span className="font-mono font-bold text-[#172033]">{submittedUuid.slice(0, 13)}...</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Sync Status:</span>
-              <span className="font-semibold text-amber-400">Pending Background Sync</span>
+              <span className="text-[#64748B]">Sync Status:</span>
+              <span className="font-bold text-[#92400E]">Pending Background Sync</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Sync Mode:</span>
-              <span className="text-emerald-400">Auto-syncs on reconnection</span>
+              <span className="text-[#64748B]">Automatic Sync:</span>
+              <span className="font-bold text-[#087443]">Active (Transfers once online)</span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-4 justify-center pt-2">
             <Link
               to="/tracker"
-              className="px-6 py-3 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-500 flex items-center gap-2 shadow-lg shadow-teal-950 cursor-pointer"
+              className="min-h-[48px] px-6 py-3 rounded-lg text-xs font-bold text-white bg-[#087443] hover:bg-[#065f37] flex items-center gap-2 cursor-pointer shadow-sm"
             >
               <ClipboardList className="w-4 h-4" />
-              <span>Track Application in Dashboard</span>
+              <span>Track in My Applications</span>
             </Link>
 
             <button
               onClick={() => setSubmittedUuid(null)}
-              className="px-6 py-3 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+              className="min-h-[48px] px-6 py-3 rounded-lg text-xs font-bold text-[#172033] bg-white hover:bg-[#F1F5F9] border border-[#CBD5E1] flex items-center gap-2 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Submit Another Application</span>
+              <span>Submit Another Form</span>
             </button>
           </div>
         </div>
       ) : (
         /* Form Card */
-        <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-6 sm:p-10 shadow-2xl space-y-8">
+        <div className="rounded-xl bg-white border-2 border-[#CBD5E1] p-6 sm:p-10 shadow-sm space-y-8">
           {/* Header */}
-          <div className="border-b border-slate-800 pb-6 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-400">
+          <div className="border-b border-[#E5E7EB] pb-6 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#007C83]">
               <span>{schema.category || 'Government Application'}</span>
               <span>•</span>
-              <span className="text-emerald-400 flex items-center gap-1">
+              <span className="text-[#087443] flex items-center gap-1 font-bold">
                 <WifiOff className="w-3.5 h-3.5" />
                 <span>Offline Form Fill Enabled</span>
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#172033]">
               {schema.title}
             </h1>
 
             {schema.description && (
-              <p className="text-sm text-slate-400 leading-relaxed max-w-2xl">
+              <p className="text-sm text-[#475569] leading-relaxed max-w-2xl">
                 {schema.description}
               </p>
             )}

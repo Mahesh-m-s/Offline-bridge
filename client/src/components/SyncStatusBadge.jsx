@@ -8,7 +8,7 @@ export default function SyncStatusBadge() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState(null);
 
-  // Live count of pending and failed items from Dexie
+  // Live count from Dexie
   const pendingSubmissionsCount = useLiveQuery(
     () => db.submissions.where('syncStatus').equals('pending').count(),
     [],
@@ -51,54 +51,48 @@ export default function SyncStatusBadge() {
 
   return (
     <div id="sync-status-badge" className="flex items-center gap-2">
-      {/* Pending / Synced Pill */}
+      {/* Pending / Failed / Synced Indicator Badge */}
       {totalPending > 0 ? (
         <button
           onClick={() => handleManualSync(false)}
           disabled={isSyncing}
-          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 shadow-sm border ${
-            isSyncing
-              ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50'
-              : 'bg-amber-950/80 text-amber-300 border-amber-500/50 hover:bg-amber-900/80 cursor-pointer'
-          }`}
-          title="Click to trigger background sync now"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#FEF3C7] text-[#92400E] border border-[#D97706] hover:bg-[#FDE68A] transition-colors cursor-pointer"
+          title="Submissions saved locally. Click to sync now."
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isSyncing ? 'animate-spin text-cyan-400' : ''}`} />
-          <span>
-            {isSyncing ? 'Syncing...' : `${totalPending} Pending Sync`}
-          </span>
+          <RefreshCw className={`w-3.5 h-3.5 text-[#D97706] ${isSyncing ? 'animate-spin' : ''}`} />
+          <span>{isSyncing ? 'Syncing...' : `${totalPending} Pending Sync`}</span>
         </button>
       ) : totalFailed > 0 ? (
         <button
           onClick={() => handleManualSync(true)}
           disabled={isSyncing}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide bg-rose-950/90 text-rose-300 border border-rose-600/60 hover:bg-rose-900/80 cursor-pointer transition-all duration-300 shadow-sm animate-pulse"
-          title="Sync errors encountered. Tap to retry."
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#FEE2E2] text-[#991B1B] border border-[#DC2626] hover:bg-[#FECACA] transition-colors cursor-pointer"
+          title="Some items failed to sync. Click to retry."
         >
-          <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+          <AlertCircle className="w-3.5 h-3.5 text-[#DC2626]" />
           <span>{totalFailed} Failed — Tap to Retry</span>
         </button>
       ) : (
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide bg-emerald-950/60 text-emerald-300 border border-emerald-700/40">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#DCFCE7] text-[#087443] border border-[#16A34A]">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#087443]" />
           <span>All Synced</span>
         </div>
       )}
 
-      {/* Direct Sync Now Action Button */}
+      {/* Direct Sync Now Button */}
       <button
         onClick={() => handleManualSync(totalFailed > 0)}
         disabled={isSyncing}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-teal-600/20 text-teal-200 border border-teal-500/30 hover:bg-teal-600/30 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
-        title="Force manual synchronization"
+        className="inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 rounded-lg text-xs font-bold text-[#007C83] bg-white border border-[#007C83] hover:bg-[#E6F5F6] active:bg-[#CCEEF0] transition-colors disabled:opacity-50 cursor-pointer"
+        title="Trigger manual background sync"
       >
-        <CloudUpload className="w-3.5 h-3.5 text-teal-400" />
+        <CloudUpload className="w-3.5 h-3.5 text-[#007C83]" />
         <span className="hidden sm:inline">Sync Now</span>
       </button>
 
-      {/* Sync Success Pop Toast Indicator */}
+      {/* Feedback Message */}
       {lastSyncResult && (
-        <span className="text-xs text-emerald-400 font-medium animate-fade-in">
+        <span className="text-xs font-bold text-[#087443]">
           Synced {lastSyncResult.syncedSubmissions + lastSyncResult.syncedGrievances} item(s)!
         </span>
       )}

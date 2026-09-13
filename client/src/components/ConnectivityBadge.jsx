@@ -20,32 +20,26 @@ export default function ConnectivityBadge() {
   return (
     <div
       id="connectivity-badge"
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 shadow-sm ${
+      className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
         isOnline
-          ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-600/40'
-          : 'bg-amber-950/80 text-amber-300 border border-amber-600/50 animate-pulse'
+          ? 'bg-[#DCFCE7] text-[#087443] border-[#16A34A]'
+          : 'bg-[#FEF3C7] text-[#92400E] border-[#D97706]'
       }`}
-      title={isOnline ? 'Internet connection active' : 'Operating in offline mode. Data saved locally.'}
+      title={isOnline ? 'Network status: Online' : 'Network status: Offline (Local storage active)'}
     >
-      <span className="relative flex h-2 w-2">
-        {isOnline ? (
-          <>
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </>
-        ) : (
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-        )}
-      </span>
-
+      <span
+        className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+          isOnline ? 'bg-[#087443]' : 'bg-[#D97706]'
+        }`}
+      />
       {isOnline ? (
         <>
-          <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+          <Wifi className="w-4 h-4 text-[#087443]" />
           <span>Online</span>
         </>
       ) : (
         <>
-          <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+          <WifiOff className="w-4 h-4 text-[#D97706]" />
           <span>Offline Mode</span>
         </>
       )}
