@@ -1,0 +1,25 @@
+{
+  "name": "OfflineBridge — Rural Digital Government Services",
+  "short_name": "OfflineBridge",
+  "description": "Offline-first digital government services, scheme eligibility, and grievance reporting for rural citizens",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#042f2e",
+  "theme_color": "#0f766e",
+  "categories": ["government", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
