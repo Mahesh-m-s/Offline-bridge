@@ -202,15 +202,3 @@ npm run dev
 
 ---
 
-## 7. Project Credits & Academic Details
-
-- **Institution:** The National Institute of Engineering, Mysuru  
-- **Department:** Department of Information Science and Engineering (Dept. of ISE)  
-- **Batch:** D4 | Academic Year 2026–27  
-- **Project Guide:** Dr. S Kuzhalvaimozhi  
-
-### Team Members
-- **Abhishek G.P**
-- **Mahesh M.S**
-- **Rajesh N**
-- **S M Shrivathsa Nonavinakere**
