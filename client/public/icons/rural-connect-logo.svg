@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22c55e" />
+      <stop offset="100%" stop-color="#15803d" />
+    </linearGradient>
+    <linearGradient id="signalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="bgCircle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0fdf4" />
+      <stop offset="100%" stop-color="#dcfce7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Circular Base Badge -->
+  <circle cx="50" cy="50" r="46" fill="url(#bgCircle)" stroke="#86efac" stroke-width="2.5" />
+
+  <!-- Wireless Connectivity Waves (Top Right) -->
+  <path d="M 52 26 A 28 28 0 0 1 76 50" fill="none" stroke="url(#signalGrad)" stroke-width="4.5" stroke-linecap="round" />
+  <path d="M 52 36 A 18 18 0 0 1 68 52" fill="none" stroke="url(#signalGrad)" stroke-width="4" stroke-linecap="round" />
+  <circle cx="52" cy="52" r="3.5" fill="#0284c7" />
+
+  <!-- Sprouting Leaf (Left and Center) -->
+  <path d="M 50 78 C 30 74 24 54 28 36 C 42 36 60 48 54 74 Z" fill="url(#leafGrad)" />
+  <!-- Leaf Central Vein -->
+  <path d="M 32 68 Q 42 54 48 42" fill="none" stroke="#fef08a" stroke-width="2" stroke-linecap="round" />
+
+  <!-- Smaller Sprout / Leaf Stem -->
+  <path d="M 52 76 C 54 65 65 60 70 58 C 69 68 62 75 52 76 Z" fill="#16a34a" opacity="0.9" />
+
+  <!-- Connecting Base Node -->
+  <circle cx="50" cy="80" r="4" fill="#15803d" />
+</svg>

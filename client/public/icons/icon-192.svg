@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#15803d" />
+      <stop offset="100%" stop-color="#166534" />
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="38" fill="url(#bgGrad)" />
+  <!-- Bridge Arches -->
+  <path d="M 28 132 Q 96 68 164 132" fill="none" stroke="#fef08a" stroke-width="10" stroke-linecap="round" />
+  <path d="M 20 138 L 172 138" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" />
+  <!-- Bridge pillars -->
+  <line x1="56" y1="110" x2="56" y2="138" stroke="#ffffff" stroke-width="5" stroke-linecap="round" />
+  <line x1="96" y1="92" x2="96" y2="138" stroke="#ffffff" stroke-width="5" stroke-linecap="round" />
+  <line x1="136" y1="110" x2="136" y2="138" stroke="#ffffff" stroke-width="5" stroke-linecap="round" />
+  <!-- Signal / Offline-Ready Node -->
+  <circle cx="96" cy="54" r="14" fill="#ffffff" />
+  <path d="M 72 40 A 30 30 0 0 1 120 40" fill="none" stroke="#fef08a" stroke-width="5" stroke-linecap="round" />
+  <path d="M 82 48 A 16 16 0 0 1 110 48" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
+</svg>
