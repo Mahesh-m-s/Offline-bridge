@@ -1,0 +1,126 @@
+[
+  {
+    "id": "pm_kisan",
+    "name": "PM-Kisan Samman Nidhi",
+    "category": "Agriculture",
+    "tagline": "Direct income support for farmer households",
+    "description": "Financial assistance of ₹6,000 per year given in three equal four-monthly installments directly into the Aadhaar-linked bank accounts of landholding farmer families.",
+    "benefits": "₹6,000 / year (3 installments of ₹2,000)",
+    "applicationForm": "pm_kisan",
+    "rules": {
+      "maxIncome": 250000,
+      "maxLandAcres": 5.0,
+      "occupations": ["Farmer", "Agricultural Laborer"],
+      "allowedCategories": ["All"]
+    },
+    "documentsRequired": [
+      "Aadhaar Card",
+      "Land Ownership Document (RTC / Pahani / 7/12 extract)",
+      "Bank Account Passbook"
+    ]
+  },
+  {
+    "id": "rural_scholarship",
+    "name": "Post-Matric Rural Youth Scholarship",
+    "category": "Education",
+    "tagline": "Full higher education fee waiver & maintenance stipend",
+    "description": "Comprehensive scholarship scheme designed to prevent rural student dropouts after 10th standard by covering college admission fees, tuition, exam fees, and monthly study allowance.",
+    "benefits": "100% Tuition Waiver + ₹1,200/mo Living Stipend",
+    "applicationForm": "post_matric_scholarship",
+    "rules": {
+      "minAge": 16,
+      "maxAge": 28,
+      "isStudent": true,
+      "maxIncome": 250000,
+      "allowedCategories": ["SC", "ST", "OBC", "EWS"]
+    },
+    "documentsRequired": [
+      "Previous Year Marksheet (min 35%)",
+      "Income & Caste Certificate",
+      "College Admission Receipt",
+      "Aadhaar-linked Bank Account"
+    ]
+  },
+  {
+    "id": "pmay_gramin",
+    "name": "Pradhan Mantri Awas Yojana (Gramin)",
+    "category": "Housing & Welfare",
+    "tagline": "Financial grant for rural pucca house construction",
+    "description": "Provides financial aid to homeless rural families or those living in kutcha / dilapidated houses to construct a durable, hygienic pucca house with sanitary toilet and LPG connection.",
+    "benefits": "₹1,20,000 construction grant + 90 days MGNREGA wages",
+    "applicationForm": null,
+    "rules": {
+      "maxIncome": 150000,
+      "landOwnership": ["Landless", "Marginal (< 1 acre)"],
+      "hasPuccaHouse": false,
+      "allowedCategories": ["All"]
+    },
+    "documentsRequired": [
+      "Job Card (MGNREGA)",
+      "BPL / Ration Card",
+      "Aadhaar Card of head of household",
+      "Geo-tagged photograph of existing site"
+    ]
+  },
+  {
+    "id": "old_age_pension",
+    "name": "National Old Age Pension Scheme",
+    "category": "Social Security",
+    "tagline": "Dignity and social security pension for senior citizens",
+    "description": "Monthly direct benefit pension disbursed by the department of social welfare for elderly rural citizens with insufficient livelihood sources.",
+    "benefits": "₹1,500 / month direct bank pension",
+    "applicationForm": null,
+    "rules": {
+      "minAge": 60,
+      "maxIncome": 100000,
+      "allowedCategories": ["All"]
+    },
+    "documentsRequired": [
+      "Age Proof (Voter ID / Aadhaar / Birth Certificate)",
+      "Income Verification Certificate",
+      "Bank Account Number"
+    ]
+  },
+  {
+    "id": "agri_equipment",
+    "name": "Agricultural Equipment Modernization Subsidy",
+    "category": "Agriculture",
+    "tagline": "50% subsidy on solar pumps, tillers, and drip irrigation",
+    "description": "State agriculture department subsidy aimed at reducing input costs and labor intensity for small and marginal farmers by subsidizing modern farm machinery.",
+    "benefits": "Up to 50% subsidy (maximum ₹1,00,000 per implement)",
+    "applicationForm": "kisan_credit",
+    "rules": {
+      "occupations": ["Farmer"],
+      "maxLandAcres": 5.0,
+      "maxIncome": 300000,
+      "allowedCategories": ["All"]
+    },
+    "documentsRequired": [
+      "Land Record Documents (Pahani / RTC)",
+      "Quotation from Authorized Farm Implement Dealer",
+      "Caste / Category Certificate"
+    ]
+  },
+  {
+    "id": "girl_education",
+    "name": "Rural Girl Child Higher Education Grant",
+    "category": "Women & Youth",
+    "tagline": "Special endowment grant for rural girl students in college",
+    "description": "Empowerment incentive paid directly to unmarried female students from rural panchayats who enroll in recognized undergraduate or technical diploma courses.",
+    "benefits": "₹50,000 one-time higher education incentive",
+    "applicationForm": "post_matric_scholarship",
+    "rules": {
+      "isFemale": true,
+      "isStudent": true,
+      "minAge": 17,
+      "maxAge": 25,
+      "maxIncome": 300000,
+      "allowedCategories": ["All"]
+    },
+    "documentsRequired": [
+      "10th & 12th Passing Certificates",
+      "College Identity Card",
+      "Gram Panchayat Residence Certificate"
+    ]
+  }
+]
