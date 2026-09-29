@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { db } from '../db/db';
+import { queueOfflineItem, getDraft, saveDraft, deleteDraft } from '../db/db';
 import { triggerSyncNow } from '../sync/syncEngine';
 import {
   AlertTriangle,
@@ -21,6 +21,15 @@ export default function GrievanceForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedUuid, setSubmittedUuid] = useState(null);
   const [error, setError] = useState('');
+
+  useEffect(() => { getDraft('grievance:new').then((draft) => {
+    if (draft?.data) { setCategory(draft.data.category || category); setVillage(draft.data.village || '');
+      setDescription(draft.data.description || ''); setContactPhone(draft.data.contactPhone || ''); }
+  }); }, []);
+  useEffect(() => {
+    const timeout = setTimeout(() => saveDraft('grievance:new', 'grievance', { category, village, description, contactPhone }), 500);
+    return () => clearTimeout(timeout);
+  }, [category, village, description, contactPhone]);
 
   const categories = [
     'Drinking Water & Sanitation',
@@ -56,20 +65,17 @@ export default function GrievanceForm() {
 
     const fullDescription = `[Village/Panchayat: ${village}] [Contact: ${contactPhone || 'N/A'}] - ${description.trim()}`;
 
-    const grievanceRecord = {
+    const payload = {
       client_uuid: clientUuid,
       category,
       description: fullDescription,
-      user_id: userId,
-      syncStatus: 'pending',
-      retryCount: 0,
-      errorMessage: null,
       created_at: new Date().toISOString(),
-      synced_at: null
+      updated_at: new Date().toISOString()
     };
 
     try {
-      await db.grievances.add(grievanceRecord);
+      await queueOfflineItem('grievance', payload, { category, description: fullDescription, user_id: userId });
+      await deleteDraft('grievance:new');
       setSubmittedUuid(clientUuid);
 
       if (navigator.onLine) {

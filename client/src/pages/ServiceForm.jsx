@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { db, defaultServiceForms } from '../db/db';
+import { db, defaultServiceForms, getDraft, saveDraft, deleteDraft, queueOfflineItem } from '../db/db';
 import { triggerSyncNow } from '../sync/syncEngine';
 import FormRenderer from '../components/FormRenderer';
 import {
@@ -21,16 +21,19 @@ export default function ServiceForm() {
   const [loading, setLoading] = useState(true);
   const [submittedUuid, setSubmittedUuid] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({});
 
   useEffect(() => {
     const fetchSchema = async () => {
       setLoading(true);
       try {
-        let found = await db.cachedForms.get(serviceType);
+        let found = await db.forms.get(serviceType) || await db.cachedForms.get(serviceType);
         if (!found) {
           found = defaultServiceForms.find((f) => f.service_type === serviceType);
         }
         setSchema(found || null);
+        const draft = await getDraft(`submission:${serviceType}`);
+        setFormData(draft?.data || {});
       } catch (err) {
         const fallback = defaultServiceForms.find((f) => f.service_type === serviceType);
         setSchema(fallback || null);
@@ -41,6 +44,12 @@ export default function ServiceForm() {
 
     fetchSchema();
   }, [serviceType]);
+
+  useEffect(() => {
+    if (!schema) return;
+    const timeout = setTimeout(() => saveDraft(`submission:${serviceType}`, serviceType, formData), 500);
+    return () => clearTimeout(timeout);
+  }, [formData, schema, serviceType]);
 
   const handleSubmit = async (formData) => {
     setIsSubmitting(true);
@@ -55,21 +64,18 @@ export default function ServiceForm() {
       }
     } catch (e) {}
 
-    const submissionRecord = {
+    const payload = {
       client_uuid: clientUuid,
-      form_id: schema.id || 1,
-      service_type: serviceType,
+      form_id: schema.id,
+      service_key: schema.service_key || serviceType,
       data_json: formData,
-      user_id: userId,
-      syncStatus: 'pending',
-      retryCount: 0,
-      errorMessage: null,
       created_at: new Date().toISOString(),
-      synced_at: null
+      updated_at: new Date().toISOString()
     };
 
     try {
-      await db.submissions.add(submissionRecord);
+      await queueOfflineItem('submission', payload, { form_id: schema.id, service_type: serviceType, data_json: formData, user_id: userId });
+      await deleteDraft(`submission:${serviceType}`);
       setSubmittedUuid(clientUuid);
 
       if (navigator.onLine) {
@@ -200,6 +206,8 @@ export default function ServiceForm() {
           {/* Form Renderer */}
           <FormRenderer
             schema={schema}
+            initialData={formData}
+            onChange={setFormData}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
           />

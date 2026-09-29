@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 
-export default function FormRenderer({ schema, initialData = {}, onSubmit, isSubmitting = false }) {
+export default function FormRenderer({ schema, initialData = {}, onChange, onSubmit, isSubmitting = false }) {
   const [formData, setFormData] = useState(initialData);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -40,7 +40,9 @@ export default function FormRenderer({ schema, initialData = {}, onSubmit, isSub
   };
 
   const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field.id]: value }));
+    const next = { ...formData, [field.id]: value };
+    setFormData(next);
+    onChange?.(next);
     if (touched[field.id]) {
       const err = validateField(field, value);
       setErrors((prev) => ({ ...prev, [field.id]: err }));

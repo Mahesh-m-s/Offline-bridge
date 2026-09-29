@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
+import { useTranslation } from 'react-i18next';
 import {
   WifiOff, CloudUpload, Sparkles, ArrowRight,
   CreditCard, Tractor, GraduationCap, FileCheck,
@@ -102,7 +103,7 @@ function HeroVisual() {
         {/* Card 2: India map hint */}
         <rect x="295" y="240" width="115" height="64" rx="10" fill="white" stroke="#B0E6ED" strokeWidth="1.5"
           style={{ filter: 'drop-shadow(0 4px 12px rgba(0,175,193,0.12))' }}/>
-        <text x="305" y="258" fontSize="7" fill="#007C89" fontWeight="700" fontFamily="sans-serif" letterSpacing="0.5">DIGITAL INDIA</text>
+        <text x="305" y="258" fontSize="7" fill="#007C89" fontWeight="700" fontFamily="sans-serif" letterSpacing="0.5">OFFLINEBRIDGE</text>
         {/* Mini India outline (simplified) */}
         <path d="M320 263 Q340 260 355 265 Q365 270 362 280 Q358 290 345 295 Q330 298 318 290 Q310 280 320 263Z"
           fill="#E8FAFC" stroke="#00AFC1" strokeWidth="1.2"/>
@@ -119,8 +120,8 @@ function HeroVisual() {
         {/* Quote bubble */}
         <rect x="50" y="120" width="140" height="44" rx="12" fill="white" stroke="#B0E6ED" strokeWidth="1.5"
           style={{ filter: 'drop-shadow(0 2px 8px rgba(0,175,193,0.10))' }}/>
-        <text x="65" y="138" fontSize="8.5" fill="#102A43" fontWeight="700" fontFamily="sans-serif">"Digital India,</text>
-        <text x="65" y="151" fontSize="8.5" fill="#102A43" fontWeight="700" fontFamily="sans-serif">for every village"</text>
+        <text x="65" y="138" fontSize="8.5" fill="#102A43" fontWeight="700" fontFamily="sans-serif">"Services for</text>
+        <text x="65" y="151" fontSize="8.5" fill="#102A43" fontWeight="700" fontFamily="sans-serif">every community"</text>
       </svg>
 
       {/* Floating stat cards overlay */}
@@ -163,6 +164,35 @@ function HeroVisual() {
   );
 }
 
+function HeroCarousel() {
+  const slides = [
+    ['Fill when you can connect', 'Your draft is stored on this device as you complete it.'],
+    ['Keep working through signal loss', 'Continue service forms even when the network drops away.'],
+    ['Sync when you are ready', 'Queued applications are sent securely when the service is reachable.']
+  ];
+  const [active, setActive] = useState(0);
+  const [lowData, setLowData] = useState(localStorage.getItem('offlinebridge_low_data') === 'true');
+  useEffect(() => {
+    const onLowData = (event) => setLowData(event.detail.enabled);
+    window.addEventListener('offlinebridge:low-data', onLowData);
+    return () => window.removeEventListener('offlinebridge:low-data', onLowData);
+  }, []);
+  useEffect(() => {
+    if (lowData || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = setInterval(() => setActive((index) => (index + 1) % slides.length), 6500);
+    return () => clearInterval(timer);
+  }, [lowData]);
+  const move = (direction) => setActive((index) => (index + direction + slides.length) % slides.length);
+  return <div className="hero-carousel" aria-label="OfflineBridge highlights">
+    <HeroVisual />
+    <div className="hero-carousel-caption" aria-live="polite"><button onClick={() => move(-1)} aria-label="Previous highlight">‹</button>
+      <div><b>{slides[active][0]}</b><span>{slides[active][1]}</span></div>
+      <button onClick={() => move(1)} aria-label="Next highlight">›</button>
+    </div>
+    <div className="hero-carousel-dots" aria-label="Choose highlight">{slides.map((slide, index) => <button key={slide[0]} aria-label={`Show highlight ${index + 1}`} aria-current={index === active ? 'true' : undefined} onClick={() => setActive(index)} />)}</div>
+  </div>;
+}
+
 /* ── Category Colors ────────────────────────────────────────── */
 const CATEGORIES = {
   Agriculture:         { cls: 'ob-cat-agriculture',      iconCls: 'ob-cat-agriculture-icon' },
@@ -176,6 +206,7 @@ function getCatStyle(cat) {
 
 /* ── Main Component ─────────────────────────────────────────── */
 export default function Home() {
+  const { t } = useTranslation();
   const pendingSubmissionsCount = useLiveQuery(
     () => db.submissions.where('syncStatus').equals('pending').count(), [], 0
   );
@@ -257,7 +288,7 @@ export default function Home() {
                   letterSpacing: '0.08em', textTransform: 'uppercase'
                 }}>
                   <ShieldCheck style={{ width: '13px', height: '13px' }} />
-                  Bridging Distances
+                  {t('home.eyebrow')}
                 </span>
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
@@ -276,14 +307,7 @@ export default function Home() {
                 fontWeight: 800, color: 'var(--navy-900)', letterSpacing: '-0.03em',
                 lineHeight: 1.12, marginBottom: '1.25rem'
               }}>
-                Government Services,{' '}
-                <span style={{
-                  background: 'linear-gradient(135deg, var(--cyan-500) 0%, var(--cyan-700) 100%)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text'
-                }}>
-                  Closer to You
-                </span>
+                {t('home.title')}
               </h1>
 
               {/* Subtitle */}
@@ -291,19 +315,18 @@ export default function Home() {
                 fontSize: 'clamp(1rem, 2.5vw, 1.125rem)', color: 'var(--navy-400)',
                 lineHeight: 1.75, marginBottom: '2rem', maxWidth: '480px'
               }}>
-                Access and apply for essential government services even in low-network areas.
-                Fill forms offline, save securely, and sync automatically when connectivity returns.
+                {t('home.description')}
               </p>
 
               {/* CTAs */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.875rem', marginBottom: '2.5rem' }}>
                 <Link to="/services" className="ob-btn-primary">
-                  Browse Services
+                  {t('home.browse')}
                   <ArrowRight style={{ width: '17px', height: '17px' }} />
                 </Link>
                 <Link to="/eligibility" className="ob-btn-secondary">
                   <PlayCircle style={{ width: '17px', height: '17px', color: 'var(--cyan-500)' }} />
-                  How It Works
+                  {t('home.eligibility')}
                 </Link>
               </div>
 
@@ -351,9 +374,21 @@ export default function Home() {
 
             {/* Right: Hero Visual */}
             <div style={{ flex: '1 1 300px', display: 'flex', justifyContent: 'center' }}>
-              <HeroVisual />
+              <HeroCarousel />
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="announcement-strip" aria-label={t('home.announcements')}>
+        <strong>{t('home.announcements')}</strong><span role="status">Service forms are saved on this device and sync when a connection is available. Check eligibility guidance before applying.</span>
+      </section>
+      <section className="home-portal-grid" aria-label={t('home.categories')}>
+        <aside className="home-category-panel"><h2>{t('home.categories')}</h2>
+          {[['Agriculture', 'Farming, crop support and credit'], ['Community', 'Housing and social welfare'], ['Education', 'Scholarships and student support'], ['Health', 'Health services and family care']].map(([name, detail]) => <Link to="/services" key={name}><span><b>{name}</b><small>{detail}</small></span><ArrowRight size={17}/></Link>)}
+        </aside>
+        <div className="home-quick-links"><h2>{t('home.quickLinks')}</h2><p>Open official service websites in a new tab. OfflineBridge does not represent these services.</p>
+          {[['Seva Sindhu', 'https://sevasindhu.karnataka.gov.in/'], ['Karnataka Sakala', 'https://sakala.kar.nic.in/'], ['DigiLocker', 'https://www.digilocker.gov.in/'], ['Janaspandana', 'https://ipgrs.karnataka.gov.in/']].map(([name, url]) => <a key={name} href={url} target="_blank" rel="noopener noreferrer">{name}<span aria-hidden="true">↗</span></a>)}
         </div>
       </section>
 

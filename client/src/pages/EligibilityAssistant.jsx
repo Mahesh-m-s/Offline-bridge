@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import schemesData from '../data/schemes.json';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
 import {
   Sparkles,
   CheckCircle2,
@@ -12,6 +14,7 @@ import {
 } from 'lucide-react';
 
 export default function EligibilityAssistant() {
+  const cachedSchemes = useLiveQuery(() => db.schemes.toArray(), [], schemesData);
   const [answers, setAnswers] = useState({
     age: '',
     annualIncome: '',
@@ -116,7 +119,7 @@ export default function EligibilityAssistant() {
     };
   };
 
-  const results = schemesData.map((scheme) => evaluateScheme(scheme, answers));
+  const results = (cachedSchemes?.length ? cachedSchemes : schemesData).map((scheme) => evaluateScheme({ ...scheme, rules: scheme.rules || scheme.eligibility_rules_json || {} }, answers));
   const eligibleSchemes = results.filter((r) => r.isEligible);
   const otherSchemes = results.filter((r) => !r.isEligible);
 

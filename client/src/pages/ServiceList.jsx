@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, defaultServiceForms } from '../db/db';
-import apiClient from '../api/apiClient';
+import { db, defaultServiceForms, refreshCatalog } from '../db/db';
 import {
   FileText,
   Search,
@@ -28,26 +27,13 @@ export default function ServiceList() {
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   const cachedForms = useLiveQuery(async () => {
-    const list = await db.cachedForms.toArray();
+    const list = await db.forms.toArray();
     return list.length > 0 ? list : defaultServiceForms;
   }, [], defaultServiceForms);
 
   useEffect(() => {
     if (navigator.onLine) {
-      apiClient.get('/forms/all')
-        .then((res) => {
-          if (res.data?.forms && res.data.forms.length > 0) {
-            const mapped = res.data.forms.map(f => ({
-              id: f.id,
-              service_type: f.service_type,
-              title: f.title,
-              version: f.version,
-              ...f.schema_json
-            }));
-            db.cachedForms.bulkPut(mapped);
-          }
-        })
-        .catch(() => {});
+      refreshCatalog().catch(() => {});
     }
   }, []);
 

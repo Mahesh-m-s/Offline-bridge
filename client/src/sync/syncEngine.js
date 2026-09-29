@@ -1,236 +1,162 @@
-/**
- * OfflineBridge Background Sync Engine
- * =====================================
- * Core Evaluator Reference Implementation:
- * 
- * Rural users frequently lose internet connection midway through transactions.
- * This engine provides reliable, idempotent, and fault-tolerant synchronization
- * of offline submissions and grievances to the backend PostgreSQL database.
- * 
- * Architectural Highlights:
- * 1. Automatic Network Detection: Attaches to window 'online' events.
- * 2. On-Mount Sweep: Automatically scans for pending records on app startup.
- * 3. Concurrency Lock: Prevents duplicate sync pipelines from executing simultaneously.
- * 4. Idempotency Guarantees: Transmits a persistent client_uuid generated at form fill time.
- *    Even if the client disconnects before receiving the HTTP response, re-sending the
- *    payload will NOT result in duplicate database entries.
- * 5. Exponential Backoff & Jitter: Automatically calculates retry delays (1s -> 2s -> 4s -> 8s -> 16s -> 30s cap)
- *    to prevent overwhelming the server upon network restoration.
- * 6. Hard Retry Cap: Transitions records to a visible 'failed' state after 5 attempts,
- *    allowing manual user-triggered retry.
- */
-
 import { db } from '../db/db';
 import apiClient from '../api/apiClient';
 
 const MAX_RETRIES = 5;
-const BASE_DELAY_MS = 1000;
-const MAX_BACKOFF_MS = 30000;
-
-// Internal sync state
-let isSyncing = false;
 const listeners = new Set();
+let running = false;
+let initialized = false;
+let retryTimer;
+let authPaused = false;
 
-/**
- * Register a listener to receive sync status updates (isSyncing, stats, lastSyncTime)
- */
-export const subscribeSyncStatus = (callback) => {
-  listeners.add(callback);
-  return () => listeners.delete(callback);
+export const subscribeSyncStatus = (listener) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 };
 
-const notifyListeners = (data) => {
-  listeners.forEach((cb) => {
-    try {
-      cb(data);
-    } catch (e) {
-      console.error('[SyncEngine Notify Error]', e);
+const publish = (state) => listeners.forEach((listener) => listener(state));
+export const calculateBackoffDelay = (retryCount, random = Math.random) =>
+  Math.min(30000, Math.min(1000 * (2 ** Math.max(0, retryCount - 1)), 30000) * (0.8 + random() * 0.4));
+
+const healthCheck = async () => {
+  if (!navigator.onLine) return false;
+  try { await apiClient.get('/health/ready', { timeout: 3000, headers: { 'Cache-Control': 'no-cache' } }); return true; }
+  catch { return false; }
+};
+
+const scheduleRetry = async () => {
+  clearTimeout(retryTimer);
+  const records = [...await db.submissions.toArray(), ...await db.grievances.toArray()]
+    .filter((record) => record.syncStatus === 'pending' && record.nextRetryAt);
+  if (!records.length || authPaused) return;
+  const nextAt = Math.min(...records.map((record) => new Date(record.nextRetryAt).getTime()));
+  retryTimer = setTimeout(() => triggerSyncNow(), Math.max(0, nextAt - Date.now()));
+};
+
+async function syncTable(entityType, table, endpoint, forceRetryFailed) {
+  const now = Date.now();
+  const records = (await table.toArray()).filter((record) =>
+    (record.syncStatus === 'pending' && (!record.nextRetryAt || new Date(record.nextRetryAt).getTime() <= now)) ||
+    (forceRetryFailed && record.syncStatus === 'failed')
+  );
+  if (!records.length) return { succeeded: 0, failed: 0, authRequired: false };
+
+  await db.transaction('rw', table, db.syncQueue, async () => {
+    for (const record of records) {
+      await table.update(record.client_uuid, { syncStatus: 'syncing' });
+      await db.syncQueue.put({ id: `${entityType}:${record.client_uuid}`, entityType,
+        clientUuid: record.client_uuid, state: 'syncing', nextRetryAt: null, updatedAt: new Date().toISOString() });
     }
   });
-};
 
-/**
- * Calculate exponential backoff duration based on retry attempt count.
- * Formula: min(BASE_DELAY_MS * 2^(retryCount), MAX_BACKOFF_MS)
- */
-export const calculateBackoffDelay = (retryCount) => {
-  return Math.min(BASE_DELAY_MS * Math.pow(2, retryCount), MAX_BACKOFF_MS);
-};
-
-/**
- * Master Sync Worker:
- * Iterates through all pending submissions and grievances in Dexie IndexedDB
- * and dispatches them sequentially with idempotency safeguards.
- */
-export const triggerSyncNow = async (options = { forceRetryFailed: false }) => {
-  // Prevent concurrent sync executions
-  if (isSyncing) {
-    console.log('[SyncEngine] Sync already in progress, skipping concurrent run.');
-    return { status: 'in_progress' };
-  }
-
-  // Abort if browser is definitely offline
-  if (!navigator.onLine) {
-    console.log('[SyncEngine] Device is currently offline. Sync postponed.');
-    return { status: 'offline' };
-  }
-
-  isSyncing = true;
-  notifyListeners({ isSyncing: true, event: 'sync_start' });
-
-  let syncedSubmissionsCount = 0;
-  let syncedGrievancesCount = 0;
-  let failedCount = 0;
-
+  let response;
   try {
-    // -------------------------------------------------------------
-    // PHASE 1: Synchronize Service Form Submissions
-    // -------------------------------------------------------------
-    const pendingSubmissions = await db.submissions
-      .filter((item) => {
-        if (options.forceRetryFailed) {
-          return item.syncStatus === 'pending' || item.syncStatus === 'failed';
+    response = await apiClient.post(endpoint, { items: records.map((record) => ({
+      ...(record.payload || {}),
+      client_uuid: record.client_uuid,
+      updated_at: record.updated_at || record.updatedAt || record.created_at || new Date().toISOString()
+    })) });
+  } catch (error) {
+    if (error.response?.status === 401) {
+      authPaused = true;
+      await db.transaction('rw', table, db.syncQueue, async () => {
+        for (const record of records) {
+          await table.update(record.client_uuid, { syncStatus: 'pending', errorMessage: 'Sign in to continue syncing.' });
+          await db.syncQueue.update(`${entityType}:${record.client_uuid}`, { state: 'pending' });
         }
-        return item.syncStatus === 'pending';
-      })
-      .toArray();
-
-    for (const submission of pendingSubmissions) {
-      // Step A: Mark item as 'syncing' to protect against race conditions
-      await db.submissions.update(submission.client_uuid, { syncStatus: 'syncing' });
-
-      try {
-        // Step B: Dispatch to backend API with client_uuid for idempotency
-        const payload = {
-          client_uuid: submission.client_uuid,
-          form_id: submission.form_id,
-          service_type: submission.service_type,
-          data_json: submission.data_json,
-          created_at: submission.created_at,
-          user_id: submission.user_id || undefined
-        };
-
-        const response = await apiClient.post('/submissions', payload);
-
-        if (response.data && response.data.success) {
-          // Step C: Success -> Mark synced in IndexedDB
-          await db.submissions.update(submission.client_uuid, {
-            syncStatus: 'synced',
-            synced_at: response.data.submission?.synced_at || new Date().toISOString(),
-            retryCount: 0,
-            errorMessage: null
-          });
-          syncedSubmissionsCount++;
-        } else {
-          throw new Error(response.data?.message || 'Server rejected submission payload');
-        }
-      } catch (error) {
-        console.warn(`[SyncEngine] Submission ${submission.client_uuid} sync attempt failed:`, error.message);
-        failedCount++;
-
-        const nextRetry = (submission.retryCount || 0) + 1;
-        const isFailed = nextRetry >= MAX_RETRIES;
-
-        await db.submissions.update(submission.client_uuid, {
-          syncStatus: isFailed ? 'failed' : 'pending',
-          retryCount: nextRetry,
-          errorMessage: error.response?.data?.message || error.message || 'Network error during sync'
-        });
-      }
+      });
+      return { succeeded: 0, failed: 0, authRequired: true };
     }
+    const message = error.response?.data?.error?.message || error.message || 'Network error';
+    await recordFailures(entityType, table, records, message);
+    return { succeeded: 0, failed: records.length, authRequired: false };
+  }
 
-    // -------------------------------------------------------------
-    // PHASE 2: Synchronize Citizens' Grievance Reports
-    // -------------------------------------------------------------
-    const pendingGrievances = await db.grievances
-      .filter((item) => {
-        if (options.forceRetryFailed) {
-          return item.syncStatus === 'pending' || item.syncStatus === 'failed';
-        }
-        return item.syncStatus === 'pending';
-      })
-      .toArray();
-
-    for (const grievance of pendingGrievances) {
-      await db.grievances.update(grievance.client_uuid, { syncStatus: 'syncing' });
-
-      try {
-        const payload = {
-          client_uuid: grievance.client_uuid,
-          category: grievance.category,
-          description: grievance.description,
-          created_at: grievance.created_at,
-          user_id: grievance.user_id || undefined
-        };
-
-        const response = await apiClient.post('/grievances', payload);
-
-        if (response.data && response.data.success) {
-          await db.grievances.update(grievance.client_uuid, {
-            syncStatus: 'synced',
-            synced_at: response.data.grievance?.synced_at || new Date().toISOString(),
-            retryCount: 0,
-            errorMessage: null
-          });
-          syncedGrievancesCount++;
-        } else {
-          throw new Error(response.data?.message || 'Server rejected grievance payload');
-        }
-      } catch (error) {
-        console.warn(`[SyncEngine] Grievance ${grievance.client_uuid} sync attempt failed:`, error.message);
-        failedCount++;
-
-        const nextRetry = (grievance.retryCount || 0) + 1;
-        const isFailed = nextRetry >= MAX_RETRIES;
-
-        await db.grievances.update(grievance.client_uuid, {
-          syncStatus: isFailed ? 'failed' : 'pending',
-          retryCount: nextRetry,
-          errorMessage: error.response?.data?.message || error.message || 'Network error during sync'
-        });
-      }
+  const results = response.data?.data || [];
+  let succeeded = 0;
+  let failed = 0;
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index];
+    const result = results.find((item) => item.index === index) || results[index];
+    if (result?.success) {
+      const server = result.data || result.submission || result.grievance || {};
+      await db.transaction('rw', table, db.syncQueue, async () => {
+        await table.update(record.client_uuid, { syncStatus: 'synced', syncedAt: server.synced_at || new Date().toISOString(),
+          synced_at: server.synced_at || new Date().toISOString(), serverId: server.id, id: server.id || record.id,
+          reference_no: server.reference_no, retryCount: 0, nextRetryAt: null, errorMessage: null });
+        await db.syncQueue.delete(`${entityType}:${record.client_uuid}`);
+      });
+      succeeded++;
+    } else {
+      await recordFailures(entityType, table, [record], result?.error?.message || result?.message || 'Server rejected this item');
+      failed++;
     }
-  } catch (globalErr) {
-    console.error('[SyncEngine Global Error]', globalErr);
+  }
+  return { succeeded, failed, authRequired: false };
+}
+
+async function recordFailures(entityType, table, records, message) {
+  await db.transaction('rw', table, db.syncQueue, async () => {
+    for (const record of records) {
+      const retryCount = (record.retryCount || 0) + 1;
+      const exhausted = retryCount >= MAX_RETRIES;
+      const nextRetryAt = exhausted ? null : new Date(Date.now() + calculateBackoffDelay(retryCount)).toISOString();
+      await table.update(record.client_uuid, { syncStatus: exhausted ? 'failed' : 'pending', retryCount,
+        nextRetryAt, errorMessage: message });
+      await db.syncQueue.put({ id: `${entityType}:${record.client_uuid}`, entityType,
+        clientUuid: record.client_uuid, state: exhausted ? 'failed' : 'pending', retryCount, nextRetryAt,
+        updatedAt: new Date().toISOString() });
+    }
+  });
+}
+
+export async function triggerSyncNow({ forceRetryFailed = false } = {}) {
+  if (running) return { status: 'in_progress' };
+  if (!(await healthCheck())) return { status: 'offline' };
+  running = true;
+  publish({ isSyncing: true, event: 'sync_start' });
+  try {
+    authPaused = false;
+    const submissions = await syncTable('submission', db.submissions, '/submissions/bulk-sync', forceRetryFailed);
+    if (submissions.authRequired) {
+      publish({ isSyncing: false, event: 'auth_required' });
+      return { status: 'auth_required' };
+    }
+    const grievances = await syncTable('grievance', db.grievances, '/grievances/bulk-sync', forceRetryFailed);
+    if (grievances.authRequired) {
+      publish({ isSyncing: false, event: 'auth_required' });
+      return { status: 'auth_required' };
+    }
+    const summary = { syncedSubmissions: submissions.succeeded, syncedGrievances: grievances.succeeded,
+      failedCount: submissions.failed + grievances.failed };
+    publish({ isSyncing: false, event: 'sync_complete', ...summary, timestamp: new Date().toISOString() });
+    return summary;
   } finally {
-    isSyncing = false;
-    notifyListeners({
-      isSyncing: false,
-      event: 'sync_complete',
-      syncedSubmissions: syncedSubmissionsCount,
-      syncedGrievances: syncedGrievancesCount,
-      failedCount,
-      timestamp: new Date().toISOString()
-    });
+    running = false;
+    await scheduleRetry();
   }
+}
 
-  return {
-    syncedSubmissionsCount,
-    syncedGrievancesCount,
-    failedCount
-  };
-};
-
-/**
- * Initialize automatic sync event listeners.
- * Should be invoked once at the top-level application root.
- */
 export const initSyncEngine = () => {
-  // 1. Trigger sync immediately when browser regains network connectivity
-  window.addEventListener('online', () => {
-    console.log('[SyncEngine] Network restored (online event detected). Triggering auto-sync...');
-    triggerSyncNow();
+  if (initialized) return;
+  initialized = true;
+  db.transaction('rw', db.submissions, db.grievances, db.syncQueue, async () => {
+    for (const table of [db.submissions, db.grievances]) {
+      const interrupted = await table.where('syncStatus').equals('syncing').toArray();
+      for (const record of interrupted) {
+        await table.update(record.client_uuid, { syncStatus: 'pending', nextRetryAt: null });
+        await db.syncQueue.put({ id: `${table.name === 'submissions' ? 'submission' : 'grievance'}:${record.client_uuid}`,
+          entityType: table.name === 'submissions' ? 'submission' : 'grievance', clientUuid: record.client_uuid,
+          state: 'pending', nextRetryAt: null, updatedAt: new Date().toISOString() });
+      }
+    }
+  }).finally(() => triggerSyncNow());
+  window.addEventListener('online', () => triggerSyncNow());
+  window.addEventListener('focus', () => triggerSyncNow());
+  navigator.serviceWorker?.addEventListener('message', (event) => {
+    if (event.data?.type === 'SYNC_REQUEST') triggerSyncNow();
   });
-
-  window.addEventListener('offline', () => {
-    console.log('[SyncEngine] Device switched to offline mode.');
-  });
-
-  // 2. Trigger initial scan if online on page load
-  if (navigator.onLine) {
-    setTimeout(() => {
-      console.log('[SyncEngine] Application initialized online. Scanning for pending items...');
-      triggerSyncNow();
-    }, 1500);
-  }
+  window.addEventListener('offline', () => publish({ isOnline: false, event: 'offline' }));
+  if (localStorage.getItem('offlinebridge_token')) authPaused = false;
 };
+
+export const resumeSyncAfterLogin = () => { authPaused = false; publish({ event: 'auth_resumed' }); triggerSyncNow(); };

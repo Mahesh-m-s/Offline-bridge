@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import apiClient from '../api/apiClient';
+import { resumeSyncAfterLogin } from '../sync/syncEngine';
 import {
   LogIn,
   UserPlus,
@@ -49,13 +50,14 @@ export default function Login() {
       if (res.data?.token) {
         localStorage.setItem('offlinebridge_token', res.data.token);
         localStorage.setItem('offlinebridge_user', JSON.stringify(res.data.user));
+        resumeSyncAfterLogin();
         setSuccessMsg('Authentication successful! Redirecting to Dashboard...');
         setTimeout(() => {
           navigate('/tracker');
         }, 800);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Authentication failed. Please check credentials or network.');
+      setError(err.response?.data?.error?.message || err.response?.data?.message || 'Authentication failed. Please check credentials or network.');
     } finally {
       setLoading(false);
     }
@@ -67,19 +69,15 @@ export default function Login() {
     setPassword('rural123');
     setIsRegister(false);
 
-    const demoUser = {
-      id: 1,
-      name: 'Ramesh Gowda',
-      phone: '9876543210',
-      role: 'citizen'
-    };
-    localStorage.setItem('offlinebridge_token', 'mock_demo_jwt_token_rural_offlinebridge');
-    localStorage.setItem('offlinebridge_user', JSON.stringify(demoUser));
-
-    setSuccessMsg('Logged in with Demo Citizen Profile (Ramesh Gowda).');
-    setTimeout(() => {
-      navigate('/tracker');
-    }, 600);
+    setLoading(true); setError('');
+    try {
+      const res = await apiClient.post('/auth/login', { phone: '9876543210', password: 'rural123' });
+      localStorage.setItem('offlinebridge_token', res.data.token);
+      localStorage.setItem('offlinebridge_user', JSON.stringify(res.data.user));
+      resumeSyncAfterLogin(); setSuccessMsg('Signed in with the demo citizen profile.');
+      setTimeout(() => navigate('/tracker'), 600);
+    } catch (err) { setError(err.response?.data?.error?.message || 'Demo account is unavailable.'); }
+    finally { setLoading(false); }
   };
 
   return (

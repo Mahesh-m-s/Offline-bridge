@@ -1,14 +1,29 @@
 import Dexie from 'dexie';
+import apiClient from '../api/apiClient';
+import defaultSchemes from '../data/schemes.json';
 
 export const db = new Dexie('OfflineBridgeDB');
 
-// Define database schema
+// Version 2 keeps existing queues and adds durable drafts, catalog stores and a
+// scheduling queue. These stores are local-first and never contain passwords.
 db.version(1).stores({
   submissions: '&client_uuid, form_id, service_type, syncStatus, retryCount, created_at, synced_at',
   grievances: '&client_uuid, category, syncStatus, retryCount, created_at, synced_at',
   cachedForms: '&service_type, id, title',
   cachedSchemes: '&id, category',
   cachedServerSubmissions: '&client_uuid, id, user_id, status'
+});
+db.version(2).stores({
+  submissions: '&client_uuid, form_id, service_type, syncStatus, retryCount, nextRetryAt, createdAt, syncedAt, serverId, user_id',
+  grievances: '&client_uuid, category, syncStatus, retryCount, nextRetryAt, createdAt, syncedAt, serverId, user_id',
+  cachedForms: '&service_type, id, title',
+  cachedSchemes: '&id, category',
+  cachedServerSubmissions: '&client_uuid, id, user_id, status',
+  forms: '&service_type, id, title',
+  schemes: '&id, category',
+  drafts: '&key, serviceType, updatedAt',
+  syncQueue: '&id, entityType, clientUuid, state, nextRetryAt',
+  meta: '&key'
 });
 
 // Default seed forms to ensure 100% offline availability on initial load
@@ -284,14 +299,67 @@ export const defaultServiceForms = [
   }
 ];
 
-// Initialize local form cache if empty
 export const initializeDbSeed = async () => {
   try {
-    const count = await db.cachedForms.count();
-    if (count === 0) {
-      await db.cachedForms.bulkPut(defaultServiceForms);
-    }
+    await db.transaction('rw', db.forms, db.cachedForms, db.schemes, db.cachedSchemes, db.meta, async () => {
+      if (!(await db.forms.count())) await db.forms.bulkPut(defaultServiceForms);
+      if (!(await db.cachedForms.count())) await db.cachedForms.bulkPut(defaultServiceForms);
+      if (!(await db.schemes.count())) await db.schemes.bulkPut(defaultSchemes);
+      if (!(await db.cachedSchemes.count())) await db.cachedSchemes.bulkPut(defaultSchemes);
+      await db.meta.put({ key: 'schemaVersion', value: 2, updatedAt: new Date().toISOString() });
+    });
   } catch (err) {
     console.warn('[OfflineBridge DB Seed Warning]:', err);
   }
 };
+
+const normalizeForm = (row) => ({
+  ...(row.schema_json || {}), ...row,
+  service_type: row.service_type || row.service_key,
+  id: row.id || row.schema_json?.id
+});
+
+export async function refreshCatalog() {
+  if (!navigator.onLine) return { refreshed: false, reason: 'offline' };
+  const [formsResult, schemesResult] = await Promise.allSettled([
+    apiClient.get('/forms'), apiClient.get('/schemes')
+  ]);
+  const forms = formsResult.status === 'fulfilled'
+    ? (formsResult.value.data.data || formsResult.value.data.forms || []).map(normalizeForm) : null;
+  const schemes = schemesResult.status === 'fulfilled'
+    ? (schemesResult.value.data.data || schemesResult.value.data.schemes || []).map((row) => ({
+      ...(defaultSchemes.find((item) => item.id === row.scheme_key) || {}), ...row,
+      id: row.scheme_key || row.id,
+      rules: row.eligibility_rules_json || row.rules,
+      benefits: row.benefit || row.benefits
+    })) : null;
+  await db.transaction('rw', db.forms, db.cachedForms, db.schemes, db.cachedSchemes, db.meta, async () => {
+    if (forms?.length) { await db.forms.bulkPut(forms); await db.cachedForms.bulkPut(forms); }
+    if (schemes?.length) { await db.schemes.bulkPut(schemes); await db.cachedSchemes.bulkPut(schemes); }
+    await db.meta.put({ key: 'lastCatalogRefresh', value: new Date().toISOString() });
+  });
+  return { refreshed: Boolean(forms?.length || schemes?.length), forms: forms?.length || 0, schemes: schemes?.length || 0 };
+}
+
+export async function saveDraft(key, serviceType, data) {
+  await db.drafts.put({ key, serviceType, data, updatedAt: new Date().toISOString() });
+}
+
+export const getDraft = (key) => db.drafts.get(key);
+export const deleteDraft = (key) => db.drafts.delete(key);
+
+export async function queueOfflineItem(entityType, payload, record) {
+  const table = entityType === 'submission' ? db.submissions : db.grievances;
+  const now = new Date().toISOString();
+  const queued = {
+    ...record, client_uuid: payload.client_uuid, payload,
+    syncStatus: 'pending', retryCount: 0, nextRetryAt: null,
+    createdAt: now, created_at: record.created_at || now, syncedAt: null
+  };
+  await db.transaction('rw', table, db.syncQueue, async () => {
+    await table.put(queued);
+    await db.syncQueue.put({ id: `${entityType}:${payload.client_uuid}`, entityType,
+      clientUuid: payload.client_uuid, state: 'pending', nextRetryAt: null, createdAt: now });
+  });
+  return queued;
+}

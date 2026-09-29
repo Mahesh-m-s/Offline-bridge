@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ConnectivityBadge from './ConnectivityBadge';
 import SyncStatusBadge from './SyncStatusBadge';
+import { OfflineControls } from './OfflineControls';
+import { useTranslation } from 'react-i18next';
 import {
   Home as HomeIcon,
   FileText,
@@ -17,11 +19,19 @@ import {
 } from 'lucide-react';
 
 export default function Layout({ children }) {
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [scrolled, setScrolled] = useState(false);
+  const [lowData, setLowData] = useState(localStorage.getItem('offlinebridge_low_data') === 'true');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('low-data', lowData);
+    localStorage.setItem('offlinebridge_low_data', String(lowData));
+    window.dispatchEvent(new CustomEvent('offlinebridge:low-data', { detail: { enabled: lowData } }));
+  }, [lowData]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('offlinebridge_user');
@@ -45,12 +55,12 @@ export default function Layout({ children }) {
   };
 
   const navLinks = [
-    { path: '/',                label: 'Home',            icon: HomeIcon },
-    { path: '/services',        label: 'Services',         icon: FileText },
-    { path: '/eligibility',     label: 'Eligibility',      icon: Sparkles },
-    { path: '/tracker',         label: 'My Applications',  icon: ClipboardList },
-    { path: '/grievance',       label: 'Lodge Grievance',  icon: AlertTriangle },
-    { path: '/grievances/track',label: 'Track Grievance',  icon: Compass },
+    { path: '/',                label: t('nav.home'),            icon: HomeIcon },
+    { path: '/about',           label: 'About',                   icon: User },
+    { path: '/schemes',         label: t('nav.schemes'),         icon: FileText },
+    { path: '/grievance',       label: t('nav.grievances'),      icon: AlertTriangle },
+    { path: '/tracker',         label: t('nav.tracking'),        icon: ClipboardList },
+    { path: '/helpline',        label: t('nav.helpline'),        icon: Compass },
   ];
 
   return (
@@ -95,6 +105,8 @@ export default function Layout({ children }) {
 
           {/* Right: Status + Auth */}
           <div className="hidden md:flex" style={{ alignItems: 'center', gap: '0.75rem' }}>
+            <button className="utility-button" onClick={() => i18n.changeLanguage(i18n.language === 'kn' ? 'en' : 'kn')} aria-label="Change language">{i18n.language === 'kn' ? 'ಕನ್ನಡ' : 'ಕನ್ನಡ / EN'}</button>
+            <button className="utility-button" onClick={() => setLowData((value) => !value)} aria-pressed={lowData}>{lowData ? 'Low data: on' : 'Low data'}</button>
             <ConnectivityBadge />
 
             {user ? (
@@ -135,6 +147,8 @@ export default function Layout({ children }) {
 
           {/* Mobile: Status + Hamburger */}
           <div className="flex lg:hidden" style={{ alignItems: 'center', gap: '0.5rem' }}>
+            <button className="utility-button" onClick={() => i18n.changeLanguage(i18n.language === 'kn' ? 'en' : 'kn')} aria-label="Change language">ಕನ್ನಡ</button>
+            <button className="utility-button" onClick={() => setLowData((value) => !value)} aria-label="Toggle low data mode" aria-pressed={lowData}>Low data</button>
             <ConnectivityBadge compact />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -226,6 +240,8 @@ export default function Layout({ children }) {
         )}
       </header>
 
+      <OfflineControls />
+
       {/* ── Main Content ──────────────────────────────── */}
       <main style={{ flex: 1, paddingBottom: '5rem' }}>
         {children}
@@ -254,8 +270,8 @@ export default function Layout({ children }) {
         <div style={{
           maxWidth: '80rem', margin: '0 auto',
           display: 'flex', flexDirection: 'column', gap: '0.75rem',
-          alignItems: 'center', textAlign: 'center'
-        }} className="md:flex-row md:items-center md:text-left" style={{ justifyContent: 'space-between' }}>
+          alignItems: 'center', textAlign: 'center', justifyContent: 'space-between'
+        }} className="md:flex-row md:items-center md:text-left">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
               <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, color: 'var(--navy-900)', fontSize: '0.875rem' }}>
