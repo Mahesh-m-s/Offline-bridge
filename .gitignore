@@ -27,7 +27,7 @@ lerna-debug.log*
 !.vscode/extensions.json
 .idea
 *.suo
-*.ntvs*
+*.ntvs
 *.njsproj
 *.sln
 *.sw?
