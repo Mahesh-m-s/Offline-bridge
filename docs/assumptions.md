@@ -103,6 +103,15 @@ The client-side eligibility engine evaluates against 6 schemes with deterministi
 - Forms and sync queues reside strictly in IndexedDB via Dexie (`OfflineBridgeDB`) to keep sensitive credential lifecycle decoupled from offline form persistence.
 - A default demo citizen profile is seeded (`phone: 9876543210`, `password: rural123`) with a 1-click test button so evaluators can inspect authenticated flows without manual registration.
 
+## Client offline implementation (2026-09-29)
+
+- Browser form values and grievance drafts are persisted in IndexedDB so that a tab refresh or network interruption does not discard in-progress work. The app never stores passwords there; the existing JWT storage remains in `localStorage`.
+- Form/catalog refreshes are best-effort. Seeded local catalogs keep the main service and eligibility flows available when the API cannot be reached.
+- Queued submissions require an authenticated user when synchronization reaches the API. A 401 leaves the records queued and asks the user to sign in again.
+- Background Sync is supplemental because browser support and service-worker lifetimes vary. The app also drains the durable queue at startup, on focus, reconnect, and manual retry.
+- Application images use original vector artwork and CSS illustration; external government portals are shown as plain links without third-party visual assets.
+- Low-data mode disables decorative animation and effects; it does not alter submitted data or service behavior.
+
 ### 6. Database and API Implementation Notes
 - Migrations are plain SQL, applied in filename order within individual transactions and recorded in `schema_migrations`.
 - Container startup waits for PostgreSQL health, then applies migrations and idempotent seeds before serving `/api/v1`.

@@ -4,3 +4,6 @@ dist
 .git
 .env
 .env.*
+coverage
+*.log
+.DS_Store

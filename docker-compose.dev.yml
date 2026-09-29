@@ -1,0 +1,20 @@
+services:
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: build
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    environment:
+      VITE_API_PROXY_TARGET: http://server:5000
+    ports: !override
+      - "5173:5173"
+    volumes:
+      - ./client:/app
+      - client_node_modules:/app/node_modules
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  client_node_modules:

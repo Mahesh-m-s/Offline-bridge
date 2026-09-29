@@ -23,17 +23,18 @@ Rural citizens often face patchy or non-existent cellular coverage when trying t
 
 ## 2. Key Features
 
-- **PWA Installability:** Full Web App Manifest (`manifest.json`) and Workbox service worker allowing installation to home screen on mobile and desktop.
+- **PWA Installability:** Generated Web App Manifest (`manifest.webmanifest`) and a Workbox `injectManifest` service worker with an explicit update prompt.
 - **Offline Form Access & Filling:** Dynamic schema-driven forms for agricultural credit, scholarships, and revenue certificates that render without network.
 - **Zero Data Loss Local Storage:** All drafts and submissions are saved instantly to IndexedDB before any network dispatch.
 - **Fault-Tolerant Background Sync:**
   - Automatic trigger on `window.addEventListener('online')` and app launch.
   - Manual on-demand "Sync Now" button.
-  - Exponential backoff retry logic ($2^n$ up to 30s) capped at 5 retries.
+  - Bulk synchronization with per-item results, exponential backoff plus jitter (up to 30s) and five automatic attempts.
   - Idempotent PostgreSQL inserts via `client_uuid` to ensure retries never create duplicate rows.
 - **Rule-Based Scheme Eligibility Assistant:** Evaluates 6 welfare schemes client-side against `schemes.json` with zero network access.
 - **Unified Application & Grievance Tracker:** Displays locally saved offline drafts and server-synced submissions with status badges.
-- **Citizen Authentication:** Lightweight JWT-based login/register with 1-click test mode for rapid evaluation.
+- **Citizen Authentication:** JWT-based login/register; the demo shortcut authenticates against the seeded server account.
+- **Bilingual portal:** English and Kannada navigation, responsive service sections, and low-data mode.
 
 ---
 
@@ -57,7 +58,6 @@ Rural citizens often face patchy or non-existent cellular coverage when trying t
 Offline-bridge/
 ├── client/
 │   ├── public/
-│   │   ├── manifest.json
 │   │   └── icons/
 │   │       ├── icon-192x192.png
 │   │       └── icon-512x512.png
@@ -191,7 +191,7 @@ npm run dev
 
 ## 6. How to Test Offline Capabilities
 
-1. Open `http://localhost:5173` in Google Chrome or Microsoft Edge.
+1. Open `http://localhost:5173` in Google Chrome or Microsoft Edge. Service workers require HTTPS or localhost.
 2. Open DevTools (`F12`) -> **Network** tab -> change "No Throttling" to **Offline**.
 3. Notice the header badge immediately switches to **Offline Mode** (amber).
 4. Navigate to **Services** -> select **Kisan Credit Card (KCC)**.
@@ -201,5 +201,7 @@ npm run dev
 8. Switch DevTools Network back to **Online**.
 9. The sync engine triggers immediately, syncs the record to the backend, and turns the badge to **All Synced** (green).
 10. Verify that repeated sync attempts never duplicate the database row due to `client_uuid` idempotency.
+
+For the containerized production build run `docker compose up --build`; to use Vite hot reload in Docker, run `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`. The client caches the app shell and public catalogs. See [docs/client-offline-architecture.md](docs/client-offline-architecture.md) for queue, draft and retry behavior.
 
 ---
