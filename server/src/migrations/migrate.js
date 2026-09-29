@@ -1,38 +1,36 @@
-const fs = require('fs');
-const path = require('path');
-const { pool, query, testConnection } = require('../db/pool');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { pool, withTransaction } = require('../db/pool');
 
-const runMigrations = async () => {
-  console.log('[OfflineBridge Migration] Running database migrations...');
-  const initSqlPath = path.join(__dirname, '001_init.sql');
-  const seedSqlPath = path.join(__dirname, 'seed.sql');
-
-  const isConnected = await testConnection();
-  if (!isConnected) {
-    console.log('[OfflineBridge Migration] Note: PostgreSQL connection is not available right now.');
-    console.log('[OfflineBridge Migration] Tables & seeds are ready in SQL scripts (001_init.sql, seed.sql) and embedded in fallback layer.');
-    return;
+async function migrate() {
+  await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+  await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  const files = (await fs.readdir(__dirname)).filter((name) => /^\d+_.*\.sql$/.test(name)).sort();
+  for (const filename of files) {
+    const alreadyApplied = await pool.query('SELECT 1 FROM schema_migrations WHERE filename = $1', [filename]);
+    if (alreadyApplied.rowCount) continue;
+    const sql = await fs.readFile(path.join(__dirname, filename), 'utf8');
+    await withTransaction(async (client) => {
+      await client.query(sql);
+      await client.query('INSERT INTO schema_migrations(filename) VALUES ($1)', [filename]);
+    });
+    console.log(`Applied migration ${filename}`);
   }
+}
 
+async function main() {
   try {
-    const initSql = fs.readFileSync(initSqlPath, 'utf8');
-    console.log('[OfflineBridge Migration] Applying 001_init.sql...');
-    await pool.query(initSql);
-    console.log('[OfflineBridge Migration] Tables created successfully.');
-
-    if (process.argv.includes('--seed')) {
-      console.log('[OfflineBridge Migration] Seeding initial data from seed.sql...');
-      const seedSql = fs.readFileSync(seedSqlPath, 'utf8');
-      await pool.query(seedSql);
-      console.log('[OfflineBridge Migration] Seed completed successfully.');
-    }
-  } catch (err) {
-    console.error('[OfflineBridge Migration Error]', err.message);
+    await migrate();
+    if (process.argv.includes('--seed')) await require('./seed').seed();
+  } catch (error) {
+    console.error('Database migration failed:', error);
+    process.exitCode = 1;
   } finally {
-    if (pool) {
-      await pool.end();
-    }
+    await pool.end();
   }
-};
+}
 
-runMigrations();
+if (require.main === module) main();
+module.exports = { migrate };
