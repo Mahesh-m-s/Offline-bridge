@@ -1,0 +1,32 @@
+import {
+  Dexie,
+  DexieYProvider,
+  Entity,
+  PropModification,
+  RangeSet,
+  add,
+  cmp,
+  import_wrapper_default,
+  liveQuery,
+  mergeRanges,
+  rangesOverlap,
+  remove,
+  replacePrefix
+} from "./chunk-5PHYFJ3G.js";
+import "./chunk-G3PMV62Z.js";
+export {
+  Dexie,
+  DexieYProvider,
+  Entity,
+  PropModification,
+  RangeSet,
+  add,
+  cmp,
+  import_wrapper_default as default,
+  liveQuery,
+  mergeRanges,
+  rangesOverlap,
+  remove,
+  replacePrefix
+};
+//# sourceMappingURL=dexie.js.map
