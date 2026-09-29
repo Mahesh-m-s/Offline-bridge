@@ -162,8 +162,9 @@ npm install
 ```
 
 ### Step 4: Start PostgreSQL for native development
-From the repository root, start the Compose database. It publishes PostgreSQL on `localhost:5432`, matching `server/.env.example`:
+After Step 3 leaves the shell in `client/`, return to the repository root and start the Compose database. It publishes PostgreSQL on `localhost:5432`, matching `server/.env.example`:
 ```bash
+cd ..
 docker compose up -d db
 docker compose ps db
 ```
@@ -171,7 +172,7 @@ Make sure `server/.env` contains a `DATABASE_URL` pointing to `localhost:5432` b
 
 ### Step 5: Run Migrations & Seed Data
 ```bash
-cd ../server
+cd server
 npm run db:migrate
 npm run db:seed
 ```
