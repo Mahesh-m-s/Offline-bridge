@@ -95,28 +95,25 @@ Offline-bridge/
 │   │   ├── routes/
 │   │   │   ├── auth.routes.js
 │   │   │   ├── submissions.routes.js
-│   │   │   ├── schemes.routes.js
+│   │   │   ├── catalog.routes.js
 │   │   │   └── grievances.routes.js
 │   │   ├── controllers/
 │   │   │   ├── auth.controller.js
 │   │   │   ├── submissions.controller.js
-│   │   │   ├── schemes.controller.js
+│   │   │   ├── catalog.controller.js
 │   │   │   └── grievances.controller.js
-│   │   ├── models/
-│   │   │   ├── user.model.js
-│   │   │   ├── form.model.js
-│   │   │   ├── submission.model.js
-│   │   │   ├── scheme.model.js
-│   │   │   └── grievance.model.js
+│   │   ├── services/               # Business logic
+│   │   ├── repositories/           # PostgreSQL and explicit test mock data access
 │   │   ├── middleware/
 │   │   │   ├── auth.middleware.js
 │   │   │   └── errorHandler.js
 │   │   ├── db/
-│   │   │   └── pool.js             # pg connection pool with resilient fallback
+│   │   │   └── pool.js             # pg connection pool and transaction helper
 │   │   ├── migrations/
-│   │   │   ├── 001_init.sql        # Table definitions & client_uuid constraints
-│   │   │   ├── seed.sql            # Seed forms & schemes dataset
+│   │   │   ├── 001_init.sql        # PostgreSQL schema
+│   │   │   ├── seed.js             # Idempotent demo catalog and records
 │   │   │   └── migrate.js          # Migration runner
+│   │   ├── docs/openapi.yaml       # OpenAPI 3.0 contract
 │   │   └── index.js                # Express app entry
 │   ├── .env.example
 │   └── package.json
@@ -134,7 +131,7 @@ Offline-bridge/
 
 ### Prerequisites
 - Node.js (v18 or higher)
-- PostgreSQL (v13 or higher, or default fallback)
+- PostgreSQL 16 (or Docker Compose)
 - Git
 
 ### Step 1: Clone Repository
@@ -148,8 +145,9 @@ In `server/.env` (copy from `server/.env.example`):
 ```env
 PORT=5000
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/offlinebridge
-JWT_SECRET=offlinebridge_super_secure_jwt_secret_key_rural_services_2026
+JWT_SECRET=replace-with-a-long-random-secret-at-least-32-characters
 NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173
 ```
 
 ### Step 3: Install Dependencies
@@ -166,8 +164,8 @@ npm install
 ### Step 4: Run Migrations & Seed Data
 ```bash
 cd ../server
-npm run migrate
-npm run seed
+npm run db:migrate
+npm run db:seed
 ```
 
 ### Step 5: Start the Development Servers
@@ -177,6 +175,10 @@ cd server
 npm run dev
 ```
 > Server runs on `http://localhost:5000`
+
+API routes are versioned under `/api/v1`. OpenAPI/Swagger UI is available at `http://localhost:5000/api-docs` and JSON at `/api-docs.json`. For the database schema and migration commands, see [docs/database.md](docs/database.md).
+
+For the container setup (database, migrations, seeds, API, and client), run `docker compose up --build` from the repository root. The demo user is `9876543210` / `rural123`.
 
 In Terminal 2 (Frontend Client PWA):
 ```bash
@@ -201,4 +203,3 @@ npm run dev
 10. Verify that repeated sync attempts never duplicate the database row due to `client_uuid` idempotency.
 
 ---
-

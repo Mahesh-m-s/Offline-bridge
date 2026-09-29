@@ -1,72 +1,8 @@
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-dotenv.config();
-
-const authRoutes = require('./routes/auth.routes');
-const submissionsRoutes = require('./routes/submissions.routes');
-const schemesRoutes = require('./routes/schemes.routes');
-const grievancesRoutes = require('./routes/grievances.routes');
-const errorHandler = require('./middleware/errorHandler');
-
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Core Middlewares
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Client-UUID']
-}));
-
-app.use(express.json({ limit: '5mb' }));
-app.use(express.urlencoded({ extended: true }));
-
-// Request Logger
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`[${req.method}] ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
-  });
-  next();
-});
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    service: 'OfflineBridge API Server',
-    time: new Date().toISOString()
-  });
-});
-
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/submissions', submissionsRoutes);
-app.use('/api/schemes', schemesRoutes);
-app.use('/api/grievances', grievancesRoutes);
-
-// Helper route alias for service forms schemas
-app.get('/api/forms', (req, res, next) => {
-  req.url = '/forms/all';
-  schemesRoutes(req, res, next);
-});
-app.get('/api/forms/:type', (req, res, next) => {
-  req.url = `/forms/${req.params.type}`;
-  schemesRoutes(req, res, next);
-});
-
-// Centralized Error Handling
-app.use(errorHandler);
-
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(`  OfflineBridge API Server running on port ${PORT}`);
-  console.log(`  URL: http://localhost:${PORT}`);
-  console.log(`  Health: http://localhost:${PORT}/api/health`);
-  console.log(`====================================================`);
-});
-
-module.exports = { app, server };
+require('dotenv').config();
+const {app}=require('./app');const{pool}=require('./db/pool');const{migrate}=require('./migrations/migrate');const{seed}=require('./migrations/seed');
+let server;
+async function start(){if(process.env.NODE_ENV!=='test'&&process.env.USE_MOCK_DB!=='true'){await migrate();await seed();}server=app.listen(Number(process.env.PORT||5000),()=>console.log(`OfflineBridge API listening on ${process.env.PORT||5000}`));}
+async function shutdown(){if(server)await new Promise(resolve=>server.close(resolve));await pool.end();}
+process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
+if(require.main===module)start().catch(error=>{console.error('Server startup failed',error);process.exit(1);});
+module.exports={start,shutdown};

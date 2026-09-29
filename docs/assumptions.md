@@ -6,13 +6,13 @@ This document logs all architectural, data modeling, and engineering assumptions
 
 ### 1. Database Architecture & Local Environment Resilience
 - **PostgreSQL JSONB:** PostgreSQL was chosen as specified in the PRD and prompt for its native `JSONB` support. All variable form submissions and eligibility rules are stored as structured JSONB documents.
-- **Connection Fallback & Mock Layer:** In developmental or academic evaluation environments where a local PostgreSQL service (`DATABASE_URL`) may not be pre-started or port 5432 is blocked, `server/src/db/pool.js` includes a smart, transparent mock store fallback. If a connection to PostgreSQL cannot be established on startup, it logs a clear diagnostic and routes queries through an in-memory SQL handler supporting the exact same API and idempotency guarantees. When PostgreSQL is running, it connects directly through `pg.Pool`.
-- **Idempotency via `client_uuid`:** Every submission and grievance generated on the client includes a standard UUIDv4 (`client_uuid`). In the database, `client_uuid` is enforced as `UNIQUE NOT NULL`. All insertion queries use `ON CONFLICT (client_uuid) DO UPDATE SET synced_at = NOW()` (or `DO NOTHING`) to guarantee that repeated sync attempts never result in duplicate records.
+- **Connection Policy:** PostgreSQL is required for normal development and production. A seeded in-memory repository implementation is selected only with `NODE_ENV=test` or `USE_MOCK_DB=true`; connection failures otherwise stop startup rather than hiding data loss behind a fallback.
+- **Idempotency via `client_uuid`:** Every submission and grievance includes a standard UUID (`client_uuid`), enforced as `UNIQUE NOT NULL`. Repeated sync uses `ON CONFLICT (client_uuid) DO UPDATE SET synced_at = NOW() RETURNING *`, preserving one record while acknowledging a retry.
 
 ---
 
 ### 2. Sample Government Services & Schema Fields
-Four representative rural government service forms are seeded in `server/src/migrations/seed.sql` and mirrored in client defaults:
+Four representative rural government service forms are seeded by `server/src/migrations/seed.js` and mirrored in client defaults:
 
 1. **Kisan Credit Card (KCC) Application (`kisan_credit`)**:
    - Applicant Full Name (`text`, required)
@@ -102,3 +102,9 @@ The client-side eligibility engine evaluates against 6 schemes with deterministi
 - Auth tokens (JWT) are stored in `localStorage` under `offlinebridge_token` alongside user metadata in `offlinebridge_user`.
 - Forms and sync queues reside strictly in IndexedDB via Dexie (`OfflineBridgeDB`) to keep sensitive credential lifecycle decoupled from offline form persistence.
 - A default demo citizen profile is seeded (`phone: 9876543210`, `password: rural123`) with a 1-click test button so evaluators can inspect authenticated flows without manual registration.
+
+### 6. Database and API Implementation Notes
+- Migrations are plain SQL, applied in filename order within individual transactions and recorded in `schema_migrations`.
+- Container startup waits for PostgreSQL health, then applies migrations and idempotent seeds before serving `/api/v1`.
+- Seeded submission examples cover pending, under-review, approved, and rejected; grievance examples cover open, in-progress, resolved, and rejected.
+- API documentation is served at `/api-docs`; its machine-readable OpenAPI document is available at `/api-docs.json`.

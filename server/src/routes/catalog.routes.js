@@ -1,0 +1,2 @@
+const express=require('express');const{z}=require('zod');const{validate}=require('../middleware/validate');const controller=require('../controllers/catalog.controller');
+const router=express.Router();router.get('/forms',controller.forms);router.get('/forms/all',controller.forms);router.get('/forms/:serviceKey',validate(z.object({params:z.object({serviceKey:z.string().min(1)})})),controller.form);router.get('/schemes',controller.schemes);module.exports=router;

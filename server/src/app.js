@@ -1,0 +1,34 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
+const swaggerUi = require('swagger-ui-express');
+const fs = require('node:fs');
+const YAML = require('yaml');
+const { validateEnv } = require('./config/env');
+const { requestId } = require('./middleware/requestId');
+const { loggerMiddleware } = require('./middleware/logger');
+const errorHandler = require('./middleware/errorHandler');
+const { router } = require('./routes');
+
+validateEnv();
+const app = express();
+app.disable('x-powered-by');
+app.use(requestId, loggerMiddleware, helmet(), cors({ origin: process.env.CORS_ORIGIN.split(',').map(v=>v.trim()), credentials: true }), compression());
+app.use(express.json({ limit: '2mb' }));
+app.use('/api/v1', (req,res,next)=>{if(req.method==='GET')res.set('Cache-Control','private, max-age=30, must-revalidate');next();});
+app.use(['/api/v1','/api'], rateLimit({ windowMs: 15*60*1000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false, handler:(req,res)=>res.status(429).json({error:{code:'RATE_LIMITED',message:'Too many requests',details:[]}}) }));
+const openapi = YAML.parse(fs.readFileSync(require('node:path').join(__dirname,'docs/openapi.yaml'),'utf8'));
+app.get('/api-docs.json',(req,res)=>res.json(openapi));
+app.use('/api-docs',swaggerUi.serve,swaggerUi.setup(openapi));
+app.use('/api/v1',router);
+// Compatibility aliases for the existing client; /api/v1 remains canonical.
+app.use('/api/auth',require('./routes/auth.routes'));
+app.use('/api',require('./routes/catalog.routes'));
+app.use('/api/submissions',require('./routes/submissions.routes'));
+app.use('/api/grievances',require('./routes/grievances.routes'));
+app.use((req,res)=>res.status(404).json({error:{code:'NOT_FOUND',message:'Route not found',details:[]}}));
+app.use(errorHandler);
+module.exports = { app };

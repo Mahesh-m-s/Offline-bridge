@@ -1,0 +1,24 @@
+process.env.NODE_ENV='test';process.env.JWT_SECRET='test-secret-that-is-at-least-thirty-two-chars';process.env.CORS_ORIGIN='http://localhost:5173';
+const request=require('supertest');const {app}=require('../src/app');const repos=require('../src/repositories');
+let server;let api;
+let users=[];let submissions=[];let grievances=[];
+beforeAll(async()=>{server=app.listen(0);await new Promise(resolve=>server.once('listening',resolve));api=request(server);});
+afterAll(async()=>new Promise(resolve=>server.close(resolve)));
+beforeEach(()=>{users=[];submissions=[];grievances=[];
+  jest.spyOn(repos.user,'findByPhone').mockImplementation(async phone=>users.find(u=>u.phone===phone)||null);
+  jest.spyOn(repos.user,'findById').mockImplementation(async id=>users.find(u=>u.id===id)||null);
+  jest.spyOn(repos.user,'create').mockImplementation(async x=>{const user={id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:x.name,phone:x.phone,role:'citizen'};users.push({...user,password_hash:x.passwordHash});return user;});
+  jest.spyOn(repos.forms,'list').mockResolvedValue([{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',service_key:'kisan_credit',title:'KCC'}]);
+  jest.spyOn(repos.forms,'byKey').mockImplementation(async key=>key==='kisan_credit'?{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'}:null);
+  jest.spyOn(repos.schemes,'list').mockResolvedValue([]);
+  jest.spyOn(repos.submissions,'create').mockImplementation(async x=>{let old=submissions.find(s=>s.client_uuid===x.clientUuid);if(old){old.synced_at=new Date().toISOString();return old;}const row={id:`sub-${submissions.length+1}`,client_uuid:x.clientUuid,user_id:x.userId,form_id:x.formId,data_json:x.data,status:'pending',reference_no:x.referenceNo};submissions.push(row);return row;});
+  jest.spyOn(repos.submissions,'list').mockImplementation(async()=>({rows:submissions}));jest.spyOn(repos.submissions,'count').mockImplementation(async()=>submissions.length);jest.spyOn(repos.submissions,'byId').mockImplementation(async(id)=>submissions.find(s=>s.id===id));
+  jest.spyOn(repos.grievances,'create').mockImplementation(async x=>{let old=grievances.find(g=>g.client_uuid===x.clientUuid);if(old){old.synced_at=new Date().toISOString();return old;}const row={id:`gr-${grievances.length+1}`,client_uuid:x.clientUuid,user_id:x.userId,category:x.category,description:x.description,status:'open',reference_no:x.referenceNo};grievances.push(row);return row;});
+  jest.spyOn(repos.grievances,'list').mockImplementation(async()=>({rows:grievances}));jest.spyOn(repos.grievances,'count').mockImplementation(async()=>grievances.length);jest.spyOn(repos.grievances,'byId').mockImplementation(async(id)=>grievances.find(g=>g.id===id));
+});
+afterEach(()=>jest.restoreAllMocks());
+async function token(){await api.post('/api/v1/auth/register').send({name:'Test Citizen',phone:'9876543210',password:'password123'}).expect(201);const response=await api.post('/api/v1/auth/login').send({phone:'9876543210',password:'password123'}).expect(200);return response.body.token;}
+test('register, login, and current user authentication work',async()=>{const jwt=await token();await api.get('/api/v1/auth/me').set('Authorization',`Bearer ${jwt}`).expect(200);await api.get('/api/v1/auth/me').expect(401);});
+test('same client_uuid sync produces one submission row',async()=>{const jwt=await token();const body={client_uuid:'f72e8690-e25a-4fe6-8aae-5c82b0c14b61',service_type:'kisan_credit',data_json:{fullName:'Asha'}};await api.post('/api/v1/submissions').set('Authorization',`Bearer ${jwt}`).send(body).expect(201);await api.post('/api/v1/submissions').set('Authorization',`Bearer ${jwt}`).send(body).expect(201);expect(submissions).toHaveLength(1);});
+test('bulk sync returns an outcome for each submission',async()=>{const jwt=await token();const response=await api.post('/api/v1/submissions/bulk-sync').set('Authorization',`Bearer ${jwt}`).send({items:[{client_uuid:'f72e8690-e25a-4fe6-8aae-5c82b0c14b61',service_type:'kisan_credit',data_json:{ok:true}},{client_uuid:'f72e8690-e25a-4fe6-8aae-5c82b0c14b62',service_type:'missing',data_json:{ok:true}}]}).expect(200);expect(response.body.data).toHaveLength(2);expect(response.body.data.map(x=>x.success)).toEqual([true,false]);});
+test('bulk grievance sync returns item results',async()=>{const jwt=await token();const response=await api.post('/api/v1/grievances/bulk-sync').set('Authorization',`Bearer ${jwt}`).send({items:[{client_uuid:'f72e8690-e25a-4fe6-8aae-5c82b0c14b61',description:'Water supply issue'}]}).expect(200);expect(response.body.data[0].success).toBe(true);});

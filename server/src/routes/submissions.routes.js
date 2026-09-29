@@ -1,15 +1,6 @@
-const express = require('express');
-const router = express.Router();
-const SubmissionsController = require('../controllers/submissions.controller');
-const { optionalAuth } = require('../middleware/auth.middleware');
-
-// Background sync endpoint: accepts submissions from offline queue
-router.post('/', optionalAuth, SubmissionsController.create);
-
-// Fetch user's submissions
-router.get('/', optionalAuth, SubmissionsController.list);
-
-// Get single submission by client UUID
-router.get('/:uuid', SubmissionsController.getByUuid);
-
-module.exports = router;
+const express=require('express');const{z}=require('zod');const{validate}=require('../middleware/validate');const{requireAuth}=require('../middleware/auth.middleware');const controller=require('../controllers/submissions.controller');
+const router=express.Router();const uuid=z.string().uuid();const submission=z.object({client_uuid:uuid,service_type:z.string().optional(),service_key:z.string().optional(),form_id:z.union([uuid,z.number().int().positive()]).optional(),data_json:z.record(z.unknown()).optional(),data:z.record(z.unknown()).optional(),created_at:z.string().datetime().optional(),updated_at:z.string().datetime().optional()}).refine(x=>x.data_json||x.data,{message:'data_json is required'});
+router.post('/bulk-sync',requireAuth,validate(z.object({body:z.object({items:z.array(submission).min(1).max(100)})})),controller.bulk);
+router.post('/',requireAuth,validate(z.object({body:submission})),controller.create);
+router.get('/',requireAuth,validate(z.object({query:z.object({page:z.coerce.number().int().positive().optional(),limit:z.coerce.number().int().positive().max(100).optional(),status:z.enum(['pending','under_review','approved','rejected']).optional()})})),controller.list);
+router.get('/:id',requireAuth,validate(z.object({params:z.object({id:uuid})})),controller.get);module.exports=router;

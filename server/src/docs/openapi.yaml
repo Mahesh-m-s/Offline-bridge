@@ -1,0 +1,148 @@
+openapi: 3.0.3
+info:
+  title: OfflineBridge API
+  version: 1.0.0
+  description: Offline-first rural services API. Authenticate with a bearer JWT using the Authorize button.
+servers:
+  - url: http://localhost:5000/api/v1
+security: []
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    User:
+      type: object
+      properties: { id: { type: string, format: uuid }, name: { type: string }, phone: { type: string }, role: { type: string, enum: [citizen, operator, admin] }, created_at: { type: string, format: date-time } }
+    ServiceForm:
+      type: object
+      properties: { id: { type: string, format: uuid }, service_key: { type: string }, title: { type: string }, title_kn: { type: string }, category: { type: string }, schema_json: { type: object }, version: { type: integer }, is_active: { type: boolean }, updated_at: { type: string, format: date-time } }
+    Scheme:
+      type: object
+      properties: { id: { type: string, format: uuid }, scheme_key: { type: string }, name: { type: string }, name_kn: { type: string }, description: { type: string }, eligibility_rules_json: { type: object }, benefit: { type: string }, is_active: { type: boolean } }
+    Submission:
+      type: object
+      properties: { id: { type: string, format: uuid }, client_uuid: { type: string, format: uuid }, user_id: { type: string, format: uuid }, form_id: { type: string, format: uuid }, data_json: { type: object }, status: { type: string, enum: [pending, under_review, approved, rejected] }, sync_status: { type: string }, reference_no: { type: string }, created_at: { type: string, format: date-time }, updated_at: { type: string, format: date-time }, synced_at: { type: string, format: date-time, nullable: true } }
+    Grievance:
+      type: object
+      properties: { id: { type: string, format: uuid }, client_uuid: { type: string, format: uuid }, user_id: { type: string, format: uuid }, category: { type: string }, description: { type: string }, status: { type: string, enum: [open, in_progress, resolved, rejected] }, reference_no: { type: string }, created_at: { type: string, format: date-time }, updated_at: { type: string, format: date-time }, synced_at: { type: string, format: date-time, nullable: true } }
+    Error:
+      type: object
+      required: [error]
+      properties: { error: { type: object, required: [code, message, details], properties: { code: { type: string }, message: { type: string }, details: { type: array, items: { type: object } } } } }
+    Pagination:
+      type: object
+      properties: { page: { type: integer }, limit: { type: integer }, total: { type: integer }, pages: { type: integer } }
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: VALIDATION_ERROR, message: Request validation failed, details: [] } }
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: UNAUTHORIZED, message: Authentication required, details: [] } }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: NOT_FOUND, message: Resource not found, details: [] } }
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: PHONE_EXISTS, message: Phone number already registered, details: [] } }
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: INTERNAL_ERROR, message: An unexpected error occurred, details: [] } }
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      responses: { '200': { description: Healthy, content: { application/json: { example: { status: ok } } } }, '500': { $ref: '#/components/responses/ServerError' } }
+  /health/ready:
+    get:
+      summary: Database readiness probe
+      responses: { '200': { description: Ready }, '503': { description: Database unavailable }, '500': { $ref: '#/components/responses/ServerError' } }
+  /auth/register:
+    post:
+      summary: Register a citizen
+      requestBody: { required: true, content: { application/json: { example: { name: Asha, phone: '9876543211', password: rural12345 } } } }
+      responses: { '201': { description: Registered, content: { application/json: { example: { token: jwt, user: { name: Asha, phone: '9876543211', role: citizen } } } } }, '400': { $ref: '#/components/responses/BadRequest' }, '409': { $ref: '#/components/responses/Conflict' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /auth/login:
+    post:
+      summary: Login
+      requestBody: { required: true, content: { application/json: { example: { phone: '9876543210', password: rural123 } } } }
+      responses: { '200': { description: Logged in }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /auth/me:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Get current user
+      responses: { '200': { description: Current user }, '401': { $ref: '#/components/responses/Unauthorized' }, '404': { $ref: '#/components/responses/NotFound' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /forms:
+    get:
+      summary: List active service forms
+      responses: { '200': { description: Forms, content: { application/json: { example: { data: [{ service_key: kisan_credit, title: Kisan Credit Card }] } } } }, '400': { $ref: '#/components/responses/BadRequest' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /forms/{serviceKey}:
+    get:
+      summary: Get a service form
+      parameters: [{ in: path, name: serviceKey, required: true, schema: { type: string }, example: kisan_credit }]
+      responses: { '200': { description: Form }, '400': { $ref: '#/components/responses/BadRequest' }, '404': { $ref: '#/components/responses/NotFound' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /schemes:
+    get:
+      summary: List active schemes
+      responses: { '200': { description: Schemes, content: { application/json: { example: { data: [{ scheme_key: pm_kisan, name: PM-Kisan Samman Nidhi }] } } } }, '400': { $ref: '#/components/responses/BadRequest' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /submissions:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Submit or sync one application (idempotent by client_uuid)
+      requestBody: { required: true, content: { application/json: { example: { client_uuid: 'f72e8690-e25a-4fe6-8aae-5c82b0c14b61', service_type: kisan_credit, data_json: { fullName: Asha } } } } }
+      responses: { '201': { description: Created or existing submission }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' }, '500': { $ref: '#/components/responses/ServerError' } }
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List the current user's submissions
+      parameters: [{ in: query, name: page, schema: { type: integer, default: 1 } }, { in: query, name: limit, schema: { type: integer, default: 20, maximum: 100 } }, { in: query, name: status, schema: { type: string, enum: [pending, under_review, approved, rejected] } }]
+      responses: { '200': { description: Page of submissions }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /submissions/bulk-sync:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Sync up to 100 applications; results are per item
+      requestBody: { required: true, content: { application/json: { example: { items: [{ client_uuid: 'f72e8690-e25a-4fe6-8aae-5c82b0c14b61', service_type: kisan_credit, data_json: { fullName: Asha } }] } } } }
+      responses: { '200': { description: Per-item outcomes }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /submissions/{id}:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Get one of the current user's submissions
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Submission }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '404': { $ref: '#/components/responses/NotFound' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /grievances:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: File or sync a grievance (idempotent by client_uuid)
+      requestBody: { required: true, content: { application/json: { example: { client_uuid: 'f72e8690-e25a-4fe6-8aae-5c82b0c14b61', category: Water, description: Broken handpump } } } }
+      responses: { '201': { description: Created or existing grievance }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' }, '500': { $ref: '#/components/responses/ServerError' } }
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: List the current user's grievances
+      parameters: [{ in: query, name: page, schema: { type: integer, default: 1 } }, { in: query, name: limit, schema: { type: integer, default: 20, maximum: 100 } }, { in: query, name: status, schema: { type: string, enum: [open, in_progress, resolved, rejected] } }]
+      responses: { '200': { description: Page of grievances }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /grievances/bulk-sync:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Sync up to 100 grievances; results are per item
+      requestBody: { required: true, content: { application/json: { example: { items: [{ client_uuid: 'f72e8690-e25a-4fe6-8aae-5c82b0c14b61', category: Water, description: Broken handpump }] } } } }
+      responses: { '200': { description: Per-item outcomes }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /grievances/{id}:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Get one of the current user's grievances
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Grievance }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '404': { $ref: '#/components/responses/NotFound' }, '500': { $ref: '#/components/responses/ServerError' } }

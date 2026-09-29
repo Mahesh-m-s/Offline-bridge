@@ -41,7 +41,7 @@ OfflineBridge adopts a decoupled offline-first architecture:
 ## 2. Prerequisites & Environment Setup
 
 - **Node.js**: v18+ (tested on v24)
-- **PostgreSQL**: v13+ (or default connection fallback)
+- **PostgreSQL**: v16+ (or Docker Compose)
 - **NPM**: v9+
 
 ### Backend Environment Configuration
@@ -49,8 +49,9 @@ In `server/.env` (copy from `server/.env.example`):
 ```env
 PORT=5000
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/offlinebridge
-JWT_SECRET=supersecret_offlinebridge_jwt_token_key_2026
+JWT_SECRET=replace-with-a-long-random-secret-at-least-32-characters
 NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173
 ```
 
 ---
@@ -71,10 +72,10 @@ npm install
 ### Step 2: Database Setup & Seeding
 ```bash
 # From server/
-npm run migrate
-npm run seed
+npm run db:migrate
+npm run db:seed
 ```
-This applies `server/src/migrations/001_init.sql` (creating tables with `client_uuid` constraints and `JSONB` columns) and seeds 4 sample government service forms, 6 schemes, and demo user accounts.
+This applies all unrecorded SQL migrations and seeds 4 service forms, 6 schemes, demo user `9876543210` / `rural123`, and sample records across every status. Applied migration filenames are stored in `schema_migrations`.
 
 ### Step 3: Run the Application
 In terminal 1 (Backend Server):
@@ -82,7 +83,7 @@ In terminal 1 (Backend Server):
 cd server
 npm run dev
 ```
-Server starts on `http://localhost:5000`.
+Server starts on `http://localhost:5000`; the API is under `/api/v1`, Swagger UI at `/api-docs`, and readiness is checked at `/api/v1/health/ready`.
 
 In terminal 2 (Frontend Client PWA):
 ```bash
