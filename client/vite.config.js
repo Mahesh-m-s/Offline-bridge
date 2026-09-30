@@ -7,6 +7,7 @@ export default defineConfig({
     strategies: 'injectManifest',
     srcDir: 'src',
     filename: 'sw.js',
+    devOptions: { enabled: true, type: 'module', navigateFallback: 'index.html' },
     registerType: 'prompt',
     injectRegister: false,
     manifestFilename: 'manifest.webmanifest',
