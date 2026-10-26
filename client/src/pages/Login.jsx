@@ -94,24 +94,24 @@ export default function Login() {
         <button
           type="button"
           onClick={handleQuickDemoLogin}
-          className="w-full min-h-[44px] py-2 px-3 rounded-lg font-bold bg-[#EBF7F0] hover:bg-[#DCFCE7] text-[#087443] border border-[#16A34A] transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+          className="w-full min-h-[44px] py-2.5 px-3 rounded-xl font-extrabold bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-orange-700 border-2 border-orange-300 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs hover:scale-[1.01]"
         >
           <span>One-Click Citizen Demo Login (Ramesh Gowda)</span>
-          <ArrowRight className="w-4 h-4" />
+          <ArrowRight className="w-4 h-4 text-orange-600" />
         </button>
       </div>
 
-      <div className="rounded-xl bg-white border-2 border-[#CBD5E1] p-6 sm:p-8 space-y-6 shadow-sm">
+      <div className="rounded-2xl bg-white border-2 border-[#E2E8F0] p-6 sm:p-8 space-y-6 shadow-md">
         {/* Toggle between Login and Register */}
-        <div className="flex rounded-lg bg-[#F1F5F9] p-1 border border-[#D1D5DB]">
+        <div className="flex rounded-xl bg-[#F1F5F9] p-1.5 border border-[#CBD5E1]">
           <button
             type="button"
             onClick={() => {
               setIsRegister(false);
               setError('');
             }}
-            className={`flex-1 min-h-[40px] py-2 text-xs font-bold rounded-md transition-colors ${
-              !isRegister ? 'bg-[#087443] text-white shadow-sm' : 'text-[#334155] hover:text-[#172033]'
+            className={`flex-1 min-h-[42px] py-2 text-xs font-bold rounded-lg transition-all ${
+              !isRegister ? 'bg-gradient-btn-primary text-white shadow-sm' : 'text-[#334155] hover:text-[#172033]'
             }`}
           >
             Sign In
@@ -122,8 +122,8 @@ export default function Login() {
               setIsRegister(true);
               setError('');
             }}
-            className={`flex-1 min-h-[40px] py-2 text-xs font-bold rounded-md transition-colors ${
-              isRegister ? 'bg-[#087443] text-white shadow-sm' : 'text-[#334155] hover:text-[#172033]'
+            className={`flex-1 min-h-[42px] py-2 text-xs font-bold rounded-lg transition-all ${
+              isRegister ? 'bg-gradient-btn-primary text-white shadow-sm' : 'text-[#334155] hover:text-[#172033]'
             }`}
           >
             New Citizen Registration
@@ -209,7 +209,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full min-h-[48px] rounded-lg font-bold text-white bg-[#087443] hover:bg-[#065f37] border border-[#065f37] flex items-center justify-center gap-2 transition-colors cursor-pointer text-sm shadow-sm"
+            className="ob-btn-primary pulse-cta w-full min-h-[50px] rounded-xl font-extrabold text-white flex items-center justify-center gap-2 cursor-pointer text-sm shadow-md"
           >
             {isRegister ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
             <span>{loading ? 'Authenticating...' : isRegister ? 'Register Account' : 'Sign In'}</span>

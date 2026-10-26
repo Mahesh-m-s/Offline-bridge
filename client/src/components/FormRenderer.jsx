@@ -185,11 +185,11 @@ export default function FormRenderer({ schema, initialData = {}, onChange, onSub
           <span>Offline Ready: Data saves immediately to this device.</span>
         </div>
 
-        {/* High-Contrast Large Touch Target Primary Button */}
+        {/* High-Contrast Standout Primary Button */}
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full sm:w-auto min-h-[48px] px-8 py-3 rounded-lg font-bold text-white bg-[#087443] hover:bg-[#065f37] active:bg-[#044427] border border-[#065f37] flex items-center justify-center gap-2 transition-colors cursor-pointer text-sm shadow-sm"
+          className="ob-btn-primary pulse-cta w-full sm:w-auto min-h-[50px] px-9 py-3 rounded-xl font-extrabold text-white flex items-center justify-center gap-2 cursor-pointer text-sm shadow-md"
         >
           <span>{isSubmitting ? 'Saving to Device...' : 'Submit Application'}</span>
           <ArrowRight className="w-4 h-4" />

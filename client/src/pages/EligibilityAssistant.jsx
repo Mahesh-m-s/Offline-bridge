@@ -327,10 +327,10 @@ export default function EligibilityAssistant() {
           <button
             type="button"
             onClick={() => setEvaluated(true)}
-            className="w-full min-h-[48px] rounded-lg font-bold text-white bg-[#087443] hover:bg-[#065f37] border border-[#065f37] flex items-center justify-center gap-2 transition-colors cursor-pointer text-sm shadow-sm"
+            className="ob-btn-primary pulse-cta w-full min-h-[50px] rounded-xl font-extrabold text-white flex items-center justify-center gap-2 cursor-pointer text-sm shadow-md"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>Check Eligible Schemes</span>
+            <Sparkles className="w-4 h-4 text-amber-200" />
+            <span>Check Eligible Schemes Now</span>
           </button>
         </div>
 
@@ -413,7 +413,7 @@ export default function EligibilityAssistant() {
                     <div className="pt-2">
                       <Link
                         to={`/services/${scheme.applicationForm}`}
-                        className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-bold text-white bg-[#087443] hover:bg-[#065f37] transition-colors cursor-pointer"
+                        className="ob-btn-primary min-h-[44px] inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white shadow-md"
                       >
                         <span>Apply Now Offline</span>
                         <ArrowRight className="w-3.5 h-3.5" />

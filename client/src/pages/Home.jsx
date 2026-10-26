@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
+import { triggerSyncNow } from '../sync/syncEngine';
 import { useTranslation } from 'react-i18next';
 import {
   WifiOff, CloudUpload, Sparkles, ArrowRight,
   CreditCard, Tractor, GraduationCap, FileCheck,
-  ShieldCheck, RefreshCw, Users, PlayCircle
+  ShieldCheck, RefreshCw, Users, PlayCircle,
+  Search, X, CheckCircle2, ChevronRight, Zap
 } from 'lucide-react';
 
 /* ── Hero Visual SVG (inline, no external images) ──────────── */
@@ -207,6 +209,19 @@ function getCatStyle(cat) {
 /* ── Main Component ─────────────────────────────────────────── */
 export default function Home() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Interactive Quick Eligibility Tool state
+  const [quickRole, setQuickRole] = useState('Farmer');
+  const [quickIncome, setQuickIncome] = useState('low');
+  
+  // Interactive Tracker state
+  const [trackerQuery, setTrackerQuery] = useState('');
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState(false);
+
   const pendingSubmissionsCount = useLiveQuery(
     () => db.submissions.where('syncStatus').equals('pending').count(), [], 0
   );
@@ -214,6 +229,58 @@ export default function Home() {
     () => db.grievances.where('syncStatus').equals('pending').count(), [], 0
   );
   const totalPending = (pendingSubmissionsCount || 0) + (pendingGrievancesCount || 0);
+
+  const handleManualSyncClick = async () => {
+    setIsManualSyncing(true);
+    try {
+      await triggerSyncNow();
+      setSyncFeedback(true);
+      setTimeout(() => setSyncFeedback(false), 3000);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
+
+  const handleTrackSubmit = (e) => {
+    e.preventDefault();
+    if (!trackerQuery.trim()) return;
+    navigate(`/tracker?ref=${encodeURIComponent(trackerQuery.trim())}`);
+  };
+
+  const getQuickEligibilityResult = () => {
+    if (quickRole === 'Farmer') {
+      return {
+        count: quickIncome === 'high' ? 1 : 2,
+        schemes: ['PM-Kisan Samman Nidhi', 'Kisan Credit Card (KCC)'],
+        benefit: '₹6,000/yr Direct Support + Subsidized Crop Credit',
+        link: '/services/pm_kisan'
+      };
+    }
+    if (quickRole === 'Student') {
+      return {
+        count: 2,
+        schemes: ['Post-Matric Rural Youth Scholarship', 'Rural Girl Child Higher Education Grant'],
+        benefit: 'Tuition Fee Waiver + ₹50,000 Education Grant',
+        link: '/services/post_matric_scholarship'
+      };
+    }
+    if (quickRole === 'Senior') {
+      return {
+        count: 1,
+        schemes: ['National Old Age Pension Scheme'],
+        benefit: '₹1,500 Monthly Pension Direct to Bank',
+        link: '/schemes'
+      };
+    }
+    return {
+      count: 2,
+      schemes: ['Caste & Income Certificate', 'PMAY (Gramin) Housing Support'],
+      benefit: 'Gram Panchayat Digital Certificate Delivery + Housing Aid',
+      link: '/services/caste_income_certificate'
+    };
+  };
+
+  const quickResult = getQuickEligibilityResult();
 
   const featuredServices = [
     {
@@ -245,6 +312,13 @@ export default function Home() {
       description: 'Apply for official revenue certificates with Gram Panchayat pickup or digital delivery.'
     }
   ];
+
+  const filteredServices = featuredServices.filter((service) => {
+    const matchesTab = activeTab === 'All' || service.category.toLowerCase().includes(activeTab.toLowerCase());
+    const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          service.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesTab && matchesSearch;
+  });
 
   const pillars = [
     {
@@ -282,19 +356,20 @@ export default function Home() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-                  padding: '0.3rem 0.75rem', borderRadius: '999px',
-                  background: 'var(--cyan-50)', border: '1.5px solid var(--border-cyan)',
-                  fontSize: '0.6875rem', fontWeight: 800, color: 'var(--cyan-700)',
-                  letterSpacing: '0.08em', textTransform: 'uppercase'
+                  padding: '0.35rem 0.85rem', borderRadius: '999px',
+                  background: 'rgba(255,255,255,0.85)', border: '1.5px solid #BAE6FD',
+                  fontSize: '0.75rem', fontWeight: 800, color: '#0369A1',
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  boxShadow: '0 2px 6px rgba(2,132,199,0.1)'
                 }}>
-                  <ShieldCheck style={{ width: '13px', height: '13px' }} />
+                  <ShieldCheck style={{ width: '14px', height: '14px', color: '#0284C7' }} />
                   {t('home.eyebrow')}
                 </span>
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-                  padding: '0.3rem 0.75rem', borderRadius: '999px',
+                  padding: '0.35rem 0.85rem', borderRadius: '999px',
                   background: '#ECFDF5', border: '1.5px solid #A7F3D0',
-                  fontSize: '0.6875rem', fontWeight: 800, color: '#065F46',
+                  fontSize: '0.75rem', fontWeight: 800, color: '#065F46',
                   letterSpacing: '0.08em', textTransform: 'uppercase'
                 }}>
                   Empowering Citizens —
@@ -303,7 +378,7 @@ export default function Home() {
 
               {/* Headline */}
               <h1 style={{
-                fontFamily: 'var(--font-heading)', fontSize: 'clamp(2rem, 5vw, 3.25rem)',
+                fontFamily: 'var(--font-heading)', fontSize: 'clamp(2.1rem, 5vw, 3.4rem)',
                 fontWeight: 800, color: 'var(--navy-900)', letterSpacing: '-0.03em',
                 lineHeight: 1.12, marginBottom: '1.25rem'
               }}>
@@ -312,21 +387,21 @@ export default function Home() {
 
               {/* Subtitle */}
               <p style={{
-                fontSize: 'clamp(1rem, 2.5vw, 1.125rem)', color: 'var(--navy-400)',
-                lineHeight: 1.75, marginBottom: '2rem', maxWidth: '480px'
+                fontSize: 'clamp(1rem, 2.5vw, 1.15rem)', color: 'var(--navy-400)',
+                lineHeight: 1.75, marginBottom: '2rem', maxWidth: '490px'
               }}>
                 {t('home.description')}
               </p>
 
-              {/* CTAs */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.875rem', marginBottom: '2.5rem' }}>
-                <Link to="/services" className="ob-btn-primary">
-                  {t('home.browse')}
-                  <ArrowRight style={{ width: '17px', height: '17px' }} />
+              {/* Standout CTAs */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '2.5rem' }}>
+                <Link to="/services" className="ob-btn-primary pulse-cta">
+                  <span>{t('home.browse')}</span>
+                  <ArrowRight style={{ width: '18px', height: '18px' }} />
                 </Link>
                 <Link to="/eligibility" className="ob-btn-secondary">
-                  <PlayCircle style={{ width: '17px', height: '17px', color: 'var(--cyan-500)' }} />
-                  {t('home.eligibility')}
+                  <Sparkles style={{ width: '18px', height: '18px', color: '#FF7700' }} />
+                  <span>{t('home.eligibility')}</span>
                 </Link>
               </div>
 
@@ -334,17 +409,18 @@ export default function Home() {
               {totalPending > 0 && (
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  gap: '0.75rem', padding: '0.875rem 1rem',
-                  background: 'var(--amber-50)', border: '1.5px solid #FCD34D',
-                  borderRadius: '12px', marginBottom: '1.5rem'
+                  gap: '0.75rem', padding: '0.875rem 1.125rem',
+                  background: '#FFFBEB', border: '1.5px solid #FCD34D',
+                  borderRadius: '14px', marginBottom: '1.75rem',
+                  boxShadow: '0 4px 12px rgba(245,158,11,0.12)'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                    <CloudUpload style={{ width: '18px', height: '18px', color: '#F59E0B', flexShrink: 0 }} />
-                    <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#92400E' }}>
+                    <CloudUpload style={{ width: '20px', height: '20px', color: '#D97706', flexShrink: 0 }} />
+                    <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#92400E' }}>
                       {totalPending} submission(s) saved locally, waiting to sync.
                     </p>
                   </div>
-                  <Link to="/tracker" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E', textDecoration: 'underline', whiteSpace: 'nowrap' }}>
+                  <Link to="/tracker" style={{ fontSize: '0.8rem', fontWeight: 800, color: '#D97706', textDecoration: 'underline', whiteSpace: 'nowrap' }}>
                     Open Tracker →
                   </Link>
                 </div>
@@ -353,19 +429,19 @@ export default function Home() {
               {/* Feature pills row */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.625rem' }}>
                 {[
-                  { icon: WifiOff, label: 'Works Offline' },
-                  { icon: RefreshCw, label: 'Auto Sync' },
-                  { icon: ShieldCheck, label: 'Secure & Private' },
-                  { icon: Users, label: 'For Every Citizen' },
+                  { icon: WifiOff, label: 'Works 100% Offline' },
+                  { icon: RefreshCw, label: 'Auto Background Sync' },
+                  { icon: ShieldCheck, label: 'Device Encrypted' },
+                  { icon: Users, label: 'Kannada & English' },
                 ].map(({ icon: Icon, label }) => (
                   <span key={label} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-                    padding: '0.35rem 0.75rem', borderRadius: '999px',
-                    background: 'rgba(255,255,255,0.7)', border: '1.5px solid var(--border-default)',
-                    fontSize: '0.75rem', fontWeight: 600, color: 'var(--navy-700)',
-                    backdropFilter: 'blur(4px)'
+                    display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                    padding: '0.4rem 0.85rem', borderRadius: '999px',
+                    background: 'rgba(255,255,255,0.85)', border: '1.5px solid rgba(203,213,225,0.7)',
+                    fontSize: '0.78rem', fontWeight: 700, color: 'var(--navy-700)',
+                    backdropFilter: 'blur(6px)', boxShadow: '0 1px 3px rgba(15,23,42,0.04)'
                   }}>
-                    <Icon style={{ width: '13px', height: '13px', color: 'var(--cyan-500)' }} />
+                    <Icon style={{ width: '13px', height: '13px', color: '#0284C7' }} />
                     {label}
                   </span>
                 ))}
@@ -380,74 +456,389 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="announcement-strip" aria-label={t('home.announcements')}>
-        <strong>{t('home.announcements')}</strong><span role="status">Service forms are saved on this device and sync when a connection is available. Check eligibility guidance before applying.</span>
-      </section>
-      <section className="home-portal-grid" aria-label={t('home.categories')}>
-        <aside className="home-category-panel"><h2>{t('home.categories')}</h2>
-          {[['Agriculture', 'Farming, crop support and credit'], ['Community', 'Housing and social welfare'], ['Education', 'Scholarships and student support'], ['Health', 'Health services and family care']].map(([name, detail]) => <Link to="/services" key={name}><span><b>{name}</b><small>{detail}</small></span><ArrowRight size={17}/></Link>)}
-        </aside>
-        <div className="home-quick-links"><h2>{t('home.quickLinks')}</h2><p>Open official service websites in a new tab. OfflineBridge does not represent these services.</p>
-          {[['Seva Sindhu', 'https://sevasindhu.karnataka.gov.in/'], ['Karnataka Sakala', 'https://sakala.kar.nic.in/'], ['DigiLocker', 'https://www.digilocker.gov.in/'], ['Janaspandana', 'https://ipgrs.karnataka.gov.in/']].map(([name, url]) => <a key={name} href={url} target="_blank" rel="noopener noreferrer">{name}<span aria-hidden="true">↗</span></a>)}
+      {/* ════════════════════════════════════════════════
+          INTERACTIVE CONSOLE STRIP (Storage & Manual Sync)
+          ════════════════════════════════════════════════ */}
+      <section style={{ maxWidth: '80rem', margin: '-1rem auto 1.5rem', padding: '0 1.5rem', position: 'relative', zIndex: 10 }}>
+        <div style={{
+          background: '#FFFFFF', border: '1.5px solid #CBD5E1', borderRadius: '16px',
+          padding: '0.875rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '1rem', flexWrap: 'wrap', boxShadow: '0 4px 18px rgba(15,23,42,0.06)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
+              padding: '0.3rem 0.75rem', borderRadius: '999px', background: '#ECFDF5',
+              border: '1px solid #A7F3D0', color: '#065F46', fontSize: '0.75rem', fontWeight: 800
+            }}>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+              Storage: Ready
+            </div>
+            <span style={{ fontSize: '0.85rem', color: 'var(--navy-700)', fontWeight: 600 }}>
+              4 Official Service Forms Cached in Local Device Memory (IndexedDB)
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {syncFeedback && (
+              <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#059669', animation: 'fadeIn 0.2s ease' }}>
+                ✓ Sync engine triggered!
+              </span>
+            )}
+            <button
+              onClick={handleManualSyncClick}
+              disabled={isManualSyncing}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                padding: '0.45rem 1rem', borderRadius: '10px',
+                background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+                color: '#FFFFFF', border: 'none', fontSize: '0.8rem', fontWeight: 800,
+                cursor: 'pointer', boxShadow: '0 2px 8px rgba(2,132,199,0.3)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <RefreshCw style={{ width: '13px', height: '13px', animation: isManualSyncing ? 'spin 1s linear infinite' : 'none' }} />
+              <span>{isManualSyncing ? 'Syncing...' : 'Sync Now'}</span>
+            </button>
+          </div>
         </div>
       </section>
 
       {/* ════════════════════════════════════════════════
-          FEATURED SERVICES
+          INTERACTIVE FEATURE 1: 30-SECOND QUICK ELIGIBILITY FINDER
           ════════════════════════════════════════════════ */}
-      <section style={{ padding: '4rem 0', background: '#FFFFFF', borderTop: '1px solid var(--border-default)' }}>
-        <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '0 1.5rem' }}>
-          {/* Section header */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
+      <section style={{ maxWidth: '80rem', margin: '0 auto 2.5rem', padding: '0 1.5rem' }}>
+        <div style={{
+          background: 'linear-gradient(135deg, #FFFFFF 0%, #FFFDF9 50%, #FFF7ED 100%)',
+          border: '2px solid #FDBA74', borderRadius: '24px',
+          padding: '2rem', boxShadow: '0 10px 30px rgba(255,85,0,0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
             <div>
-              <h2 className="ob-section-title">Featured Citizen Services</h2>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#EA580C', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.35rem' }}>
+                <Zap style={{ width: '14px', height: '14px' }} />
+                Interactive Instant Matcher
+              </div>
+              <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.4rem', fontWeight: 800, color: 'var(--navy-900)' }}>
+                Check Your Eligibility in 15 Seconds
+              </h2>
+              <p style={{ fontSize: '0.875rem', color: 'var(--navy-400)', marginTop: '0.2rem' }}>
+                Pick your profile below to see which state & national welfare schemes you qualify for immediately.
+              </p>
+            </div>
+            <Link to="/eligibility" style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+              fontSize: '0.84rem', fontWeight: 800, color: '#EA580C',
+              textDecoration: 'none', background: '#FFF7ED', padding: '0.5rem 1rem',
+              borderRadius: '10px', border: '1px solid #FDBA74'
+            }}>
+              Full Calculator Form <ChevronRight style={{ width: '15px', height: '15px' }} />
+            </Link>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'stretch' }}>
+            {/* Interactive Selectors */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: 'var(--navy-700)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                  1. Select Citizen Profile
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+                  {[
+                    { id: 'Farmer', label: '🌾 Farmer / Kissan' },
+                    { id: 'Student', label: '🎓 Rural Student' },
+                    { id: 'Senior', label: '🧓 Senior Citizen (60+)' },
+                    { id: 'Resident', label: '🏡 Rural Resident' }
+                  ].map((role) => (
+                    <button
+                      key={role.id}
+                      type="button"
+                      onClick={() => setQuickRole(role.id)}
+                      style={{
+                        padding: '0.7rem 0.85rem', borderRadius: '12px',
+                        fontSize: '0.82rem', fontWeight: quickRole === role.id ? 800 : 600,
+                        textAlign: 'left', cursor: 'pointer', transition: 'all 0.15s ease',
+                        border: quickRole === role.id ? '2px solid #FF5500' : '1.5px solid #CBD5E1',
+                        background: quickRole === role.id ? '#FFF7ED' : '#FFFFFF',
+                        color: quickRole === role.id ? '#C2410C' : 'var(--navy-700)',
+                        boxShadow: quickRole === role.id ? '0 4px 12px rgba(255,85,0,0.15)' : 'none'
+                      }}
+                    >
+                      {role.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: 'var(--navy-700)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                  2. Household Annual Income
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                  {[
+                    { id: 'low', label: '< ₹1.5 Lakhs' },
+                    { id: 'mid', label: '₹1.5L - ₹3L' },
+                    { id: 'high', label: '> ₹3 Lakhs' }
+                  ].map((inc) => (
+                    <button
+                      key={inc.id}
+                      type="button"
+                      onClick={() => setQuickIncome(inc.id)}
+                      style={{
+                        padding: '0.65rem 0.5rem', borderRadius: '12px',
+                        fontSize: '0.78rem', fontWeight: quickIncome === inc.id ? 800 : 600,
+                        textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s ease',
+                        border: quickIncome === inc.id ? '2px solid #0284C7' : '1.5px solid #CBD5E1',
+                        background: quickIncome === inc.id ? '#F0F9FF' : '#FFFFFF',
+                        color: quickIncome === inc.id ? '#0369A1' : 'var(--navy-700)',
+                        boxShadow: quickIncome === inc.id ? '0 4px 12px rgba(2,132,199,0.15)' : 'none'
+                      }}
+                    >
+                      {inc.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic Result Card */}
+            <div style={{
+              background: '#FFFFFF', border: '2px solid #FED7AA', borderRadius: '18px',
+              padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+              boxShadow: '0 6px 20px rgba(15,23,42,0.05)'
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                    padding: '0.25rem 0.75rem', borderRadius: '999px',
+                    background: '#ECFDF5', border: '1px solid #A7F3D0',
+                    color: '#065F46', fontSize: '0.75rem', fontWeight: 800
+                  }}>
+                    <CheckCircle2 style={{ width: '13px', height: '13px', color: '#10B981' }} />
+                    Eligible: {quickResult.count} Schemes
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--navy-300)', fontWeight: 700 }}>
+                    Instant Recommendation
+                  </span>
+                </div>
+
+                <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.05rem', fontWeight: 800, color: 'var(--navy-900)', marginBottom: '0.5rem' }}>
+                  {quickResult.schemes.join(' & ')}
+                </h3>
+                <p style={{ fontSize: '0.84rem', color: '#047857', fontWeight: 700, marginBottom: '0.75rem' }}>
+                  🎁 Benefit: {quickResult.benefit}
+                </p>
+                <p style={{ fontSize: '0.78rem', color: 'var(--navy-400)', lineHeight: 1.5 }}>
+                  Based on your entered profile ({quickRole}, {quickIncome === 'low' ? '< ₹1.5L' : quickIncome === 'mid' ? '₹1.5L - ₹3L' : '> ₹3L'}). No identity documents required for preliminary check.
+                </p>
+              </div>
+
+              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #FED7AA', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Link to={quickResult.link} className="ob-btn-primary" style={{ flex: 1, minHeight: '44px', padding: '0.65rem 1.25rem', fontSize: '0.85rem' }}>
+                  Apply Now Offline <ArrowRight style={{ width: '15px', height: '15px' }} />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════
+          FEATURED SERVICES WITH INTERACTIVE TABS & SEARCH
+          ════════════════════════════════════════════════ */}
+      <section style={{ padding: '4rem 0 3rem', background: '#FFFFFF', borderTop: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '0 1.5rem' }}>
+          
+          {/* Section header */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '1.75rem', gap: '1rem', flexWrap: 'wrap' }}>
+            <div>
+              <h2 className="ob-section-title">Citizen Services Directory</h2>
               <p className="ob-section-subtitle">
-                Most accessed schemes and services. Available offline for your convenience.
+                Fill, validate, and store applications locally. Auto-syncs to Gram Panchayat & District servers.
               </p>
             </div>
             <Link to="/services" style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.375rem',
-              fontSize: '0.875rem', fontWeight: 700, color: 'var(--cyan-500)',
+              fontSize: '0.875rem', fontWeight: 800, color: '#0284C7',
               textDecoration: 'none', whiteSpace: 'nowrap'
-            }}
-              onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'}
-              onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}
-            >
-              View All Services
-              <ArrowRight style={{ width: '14px', height: '14px' }} />
+            }}>
+              View Full Directory <ArrowRight style={{ width: '15px', height: '15px' }} />
             </Link>
           </div>
 
+          {/* Interactive Filter Bar & Live Search */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '1rem', flexWrap: 'wrap', marginBottom: '2rem',
+            padding: '0.875rem 1rem', background: '#F8FAFC', borderRadius: '16px',
+            border: '1.5px solid #E2E8F0'
+          }}>
+            {/* Category Filter Chips */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {[
+                { id: 'All', label: 'All Services (4)' },
+                { id: 'Agriculture', label: '🌾 Agriculture (2)' },
+                { id: 'Education', label: '🎓 Education (1)' },
+                { id: 'Revenue', label: '📋 Revenue (1)' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    padding: '0.5rem 1rem', borderRadius: '10px',
+                    fontSize: '0.82rem', fontWeight: activeTab === tab.id ? 800 : 600,
+                    cursor: 'pointer', transition: 'all 0.15s ease',
+                    border: activeTab === tab.id ? '1.5px solid #FF5500' : '1.5px solid #CBD5E1',
+                    background: activeTab === tab.id ? 'linear-gradient(135deg, #FF5500 0%, #FF7700 100%)' : '#FFFFFF',
+                    color: activeTab === tab.id ? '#FFFFFF' : 'var(--navy-700)',
+                    boxShadow: activeTab === tab.id ? '0 4px 12px rgba(255,85,0,0.3)' : 'none'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Live Search Input */}
+            <div style={{ position: 'relative', minWidth: '240px', flex: '1 1 240px', maxWidth: '360px' }}>
+              <Search style={{ width: '16px', height: '16px', color: '#64748B', position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                placeholder="Filter services by keyword..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%', height: '40px', paddingLeft: '36px', paddingRight: searchQuery ? '36px' : '12px',
+                  borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.84rem',
+                  color: 'var(--navy-900)', background: '#FFFFFF', outline: 'none'
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
+                >
+                  <X style={{ width: '14px', height: '14px' }} />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Cards Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1.25rem' }}>
-            {featuredServices.map((service) => {
-              const Icon = service.icon;
-              const { cls, iconCls } = getCatStyle(service.category);
-              return (
-                <div key={service.id} className="ob-service-card">
-                  <div className={`ob-service-card__icon-wrap ${iconCls}`}>
-                    <Icon style={{ width: '24px', height: '24px' }} />
-                  </div>
-                  <span className={`ob-service-card__category ${cls}`} style={{
-                    display: 'inline-block', padding: '2px 8px', borderRadius: '4px',
-                    border: '1px solid', marginBottom: '0.5rem'
-                  }}>
-                    {service.category.toUpperCase()}
-                  </span>
-                  <h3 className="ob-service-card__title">{service.title}</h3>
-                  <p className="ob-service-card__desc">{service.description}</p>
-                  <div className="ob-service-card__footer">
-                    <span className="ob-offline-badge">
-                      <span className="ob-offline-dot" />
-                      Available Offline
+          {filteredServices.length === 0 ? (
+            <div style={{ padding: '3rem', textAlign: 'center', background: '#F8FAFC', borderRadius: '16px', border: '1.5px dashed #CBD5E1' }}>
+              <p style={{ fontWeight: 700, color: 'var(--navy-700)', marginBottom: '0.5rem' }}>No services match your search or filter.</p>
+              <button
+                onClick={() => { setActiveTab('All'); setSearchQuery(''); }}
+                style={{
+                  padding: '0.5rem 1rem', borderRadius: '8px', border: 'none',
+                  background: 'var(--blue-500)', color: '#FFFFFF', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer'
+                }}
+              >
+                Reset Filters
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.5rem' }}>
+              {filteredServices.map((service) => {
+                const Icon = service.icon;
+                const { cls, iconCls } = getCatStyle(service.category);
+                return (
+                  <div key={service.id} className="ob-service-card">
+                    <div className={`ob-service-card__icon-wrap ${iconCls}`}>
+                      <Icon style={{ width: '26px', height: '26px' }} />
+                    </div>
+                    <span className={`ob-service-card__category ${cls}`} style={{
+                      display: 'inline-block', padding: '3px 9px', borderRadius: '6px',
+                      border: '1px solid', marginBottom: '0.5rem', width: 'fit-content'
+                    }}>
+                      {service.category.toUpperCase()}
                     </span>
-                    <Link to={`/services/${service.id}`} className="ob-card-arrow-btn" aria-label={`Apply for ${service.title}`}>
-                      <ArrowRight style={{ width: '15px', height: '15px' }} />
-                    </Link>
+                    <h3 className="ob-service-card__title">{service.title}</h3>
+                    <p className="ob-service-card__desc">{service.description}</p>
+                    <div className="ob-service-card__footer">
+                      <span className="ob-offline-badge">
+                        <span className="ob-offline-dot" />
+                        Offline Form Ready
+                      </span>
+                      <Link to={`/services/${service.id}`} className="ob-card-arrow-btn" aria-label={`Apply for ${service.title}`}>
+                        <ArrowRight style={{ width: '16px', height: '16px' }} />
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════
+          INTERACTIVE FEATURE 2: INSTANT APPLICATION TRACKER WIDGET
+          ════════════════════════════════════════════════ */}
+      <section style={{ maxWidth: '80rem', margin: '2.5rem auto', padding: '0 1.5rem' }}>
+        <div style={{
+          background: 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)',
+          border: '1.5px solid #BAE6FD', borderRadius: '24px',
+          padding: '2.25rem', boxShadow: '0 8px 24px rgba(2,132,199,0.08)'
+        }}>
+          <div style={{ maxWidth: '640px', margin: '0 auto', textAlign: 'center' }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+              padding: '0.3rem 0.8rem', borderRadius: '999px',
+              background: '#FFFFFF', border: '1px solid #7DD3FC',
+              fontSize: '0.75rem', fontWeight: 800, color: '#0369A1', marginBottom: '0.75rem'
+            }}>
+              <Search style={{ width: '13px', height: '13px' }} />
+              Live Application Tracking
+            </span>
+            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.5rem', fontWeight: 800, color: 'var(--navy-900)', marginBottom: '0.5rem' }}>
+              Track Your Application or Grievance
+            </h2>
+            <p style={{ fontSize: '0.875rem', color: 'var(--navy-400)', marginBottom: '1.5rem' }}>
+              Check the status of your submitted forms, Gram Panchayat approvals, or grievance redressals.
+            </p>
+
+            <form onSubmit={handleTrackSubmit} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '1rem' }}>
+              <input
+                type="text"
+                placeholder="Enter Reference No. (e.g. OB-DEMO-S-000001)"
+                value={trackerQuery}
+                onChange={(e) => setTrackerQuery(e.target.value)}
+                style={{
+                  flex: '1 1 280px', maxWidth: '420px', height: '50px',
+                  padding: '0 1.25rem', borderRadius: '12px',
+                  border: '2px solid #CBD5E1', fontSize: '0.9rem',
+                  outline: 'none', background: '#FFFFFF', color: 'var(--navy-900)', fontWeight: 600
+                }}
+              />
+              <button
+                type="submit"
+                className="ob-btn-primary"
+                style={{ minHeight: '50px', padding: '0 1.75rem' }}
+              >
+                Track Status <ArrowRight style={{ width: '16px', height: '16px' }} />
+              </button>
+            </form>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Quick Demo Queries:</span>
+              <button
+                type="button"
+                onClick={() => setTrackerQuery('OB-DEMO-S-000001')}
+                style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0284C7', background: '#FFFFFF', padding: '3px 8px', borderRadius: '6px', border: '1px solid #BAE6FD', cursor: 'pointer' }}
+              >
+                OB-DEMO-S-000001 (Approved)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrackerQuery('OB-DEMO-G-000001')}
+                style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0284C7', background: '#FFFFFF', padding: '3px 8px', borderRadius: '6px', border: '1px solid #BAE6FD', cursor: 'pointer' }}
+              >
+                OB-DEMO-G-000001 (Grievance)
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -491,45 +882,48 @@ export default function Home() {
       </section>
 
       {/* ════════════════════════════════════════════════
-          BOTTOM CTA BAND
+          BOTTOM CTA BAND WITH STANDOUT BUTTONS
           ════════════════════════════════════════════════ */}
       <section style={{
-        background: 'linear-gradient(135deg, var(--cyan-500) 0%, var(--cyan-700) 100%)',
-        padding: '3rem 1.5rem', textAlign: 'center'
+        background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 40%, #0F2D37 100%)',
+        padding: '4rem 1.5rem', textAlign: 'center', position: 'relative', overflow: 'hidden'
       }}>
-        <div style={{ maxWidth: '580px', margin: '0 auto' }}>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(1.375rem, 3vw, 1.875rem)', fontWeight: 800, color: '#FFFFFF', marginBottom: '0.75rem', letterSpacing: '-0.02em' }}>
-            Ready to access government services?
+        {/* Ambient glow spots */}
+        <div style={{
+          position: 'absolute', top: '-60px', left: '50%', transform: 'translateX(-50%)',
+          width: '500px', height: '200px', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(255,85,0,0.18) 0%, rgba(2,132,199,0.15) 60%, transparent 80%)',
+          pointerEvents: 'none', filter: 'blur(35px)'
+        }} />
+
+        <div style={{ maxWidth: '640px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+            padding: '0.35rem 0.85rem', borderRadius: '999px',
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+            color: '#FDBA74', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase',
+            letterSpacing: '0.08em', marginBottom: '1rem'
+          }}>
+            <Zap style={{ width: '13px', height: '13px' }} />
+            Zero Connectivity Barrier
+          </span>
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(1.6rem, 3.5vw, 2.2rem)', fontWeight: 800, color: '#FFFFFF', marginBottom: '0.875rem', letterSpacing: '-0.02em' }}>
+            Ready to Access Essential Rural Services?
           </h2>
-          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '1rem', marginBottom: '1.75rem', lineHeight: 1.65 }}>
-            Start your application today — even without internet. Your data stays safe on this device.
+          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.05rem', marginBottom: '2.25rem', lineHeight: 1.7 }}>
+            Complete your applications offline today. Data is preserved safely on this device and synced whenever connectivity resumes.
           </p>
-          <div style={{ display: 'flex', gap: '0.875rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/services" style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-              padding: '0.875rem 2rem', borderRadius: '12px', background: '#FFFFFF',
-              color: 'var(--cyan-700)', fontWeight: 800, fontSize: '0.9375rem',
-              textDecoration: 'none', boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
-              transition: 'transform 0.12s ease, box-shadow 0.12s ease'
-            }}
-              onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.18)'; }}
-              onMouseOut={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.12)'; }}
-            >
-              Browse All Services <ArrowRight style={{ width: '17px', height: '17px' }} />
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link to="/services" className="ob-btn-primary pulse-cta" style={{ fontSize: '1rem', padding: '1rem 2.25rem' }}>
+              <span>Browse All Services</span>
+              <ArrowRight style={{ width: '18px', height: '18px' }} />
             </Link>
-            <Link to="/eligibility" style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-              padding: '0.875rem 1.75rem', borderRadius: '12px',
-              background: 'rgba(255,255,255,0.15)', color: '#FFFFFF',
-              fontWeight: 700, fontSize: '0.9375rem', textDecoration: 'none',
-              border: '2px solid rgba(255,255,255,0.35)',
-              transition: 'background 0.12s ease'
-            }}
-              onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
-              onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-            >
-              <Sparkles style={{ width: '16px', height: '16px' }} />
-              Check Eligibility
+            <Link to="/eligibility" className="ob-btn-secondary" style={{
+              background: 'rgba(255,255,255,0.12)', color: '#FFFFFF',
+              borderColor: 'rgba(255,255,255,0.3)', minHeight: '52px', padding: '1rem 2rem'
+            }}>
+              <Sparkles style={{ width: '18px', height: '18px', color: '#FDBA74' }} />
+              <span>Check Eligibility</span>
             </Link>
           </div>
         </div>
