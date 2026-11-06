@@ -10,15 +10,16 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: [
         'favicon.svg',
+        'icons/arivunet-logo.svg',
         'icons/icon-192.svg',
         'icons/icon-512.svg',
         'icons/icon-maskable-512.svg'
       ],
       manifest: {
         id: '/',
-        name: 'OfflineBridge — Rural Digital Services',
-        short_name: 'OfflineBridge',
-        description: 'Offline-first PWA for rural government services, forms, and grievance tracking.',
+        name: 'ArivuNet — Know Your Rights. Access Your Services.',
+        short_name: 'ArivuNet',
+        description: 'ArivuNet: Offline-first PWA for rural digital services — know your rights, access your services.',
         theme_color: '#15803d',
         background_color: '#f8fafc',
         display: 'standalone',

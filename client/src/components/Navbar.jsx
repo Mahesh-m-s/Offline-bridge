@@ -18,13 +18,20 @@ import {
   Shield,
   FileCheck,
   Building2,
-  Users
+  BookOpen,
+  CheckCircle2,
+  Sparkles,
+  LogIn,
+  LogOut
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { isOnline, setupNetworkListeners } from '../registerServiceWorker';
 
 export default function Navbar() {
   const [online, setOnline] = useState(isOnline());
-  const [isKannada, setIsKannada] = useState(false);
+  const { isKannada, toggleLanguage, t } = useLanguage();
+  const { currentUser, isAuthenticated, userRole, logout } = useAuth();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [fontScale, setFontScale] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,7 +72,7 @@ export default function Navbar() {
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/services?search=${encodeURIComponent(searchQuery)}`);
+      navigate(`/services?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
@@ -76,27 +83,17 @@ export default function Navbar() {
       {/* 1. TOP UTILITY HEADER (Dark Blue) */}
       <div className="gov-top-header" role="region" aria-label="Karnataka Government Utility Bar">
         <div className="gov-top-container">
-          {/* Left: Language Toggle & CM Portal */}
+          {/* Left: Language Toggle (CM Portal link removed as requested) */}
           <div className="top-left-actions">
             <button
               type="button"
               className="btn-lang-toggle"
-              onClick={() => setIsKannada(!isKannada)}
+              onClick={toggleLanguage}
               aria-label="Toggle Kannada Language"
+              title="Switch between English and Kannada"
             >
               {isKannada ? 'English' : 'ಕನ್ನಡ'}
             </button>
-
-            <a
-              href="https://cm.karnataka.gov.in"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-cm-portal"
-              title="Click to visit Chief Minister Portal"
-            >
-              <span>{isKannada ? 'ಮುಖ್ಯಮಂತ್ರಿಗಳ ಪೋರ್ಟಲ್' : 'Click here to visit CM Portal'}</span>
-              <ExternalLink size={13} aria-hidden="true" />
-            </a>
           </div>
 
           {/* Right: Accessibility, Search, Weather */}
@@ -168,21 +165,28 @@ export default function Navbar() {
       {/* 2. MAIN BRAND NAVBAR (Clean White with Emblem) */}
       <header className="gov-brand-navbar" role="banner">
         <div className="gov-brand-container">
-          {/* Rural Connect Logo & Title */}
-          <Link to="/" className="gov-brand-left" aria-label="Rural Connect Home">
+          {/* ArivuNet Brand Logo & Title */}
+          <Link to="/" className="gov-brand-left" aria-label="ArivuNet Home">
             <img
-              src="/icons/rural-connect-logo.svg"
-              alt="Rural Connect Logo"
+              src="/icons/arivunet-logo.svg"
+              alt="ArivuNet Logo"
               className="gov-emblem-img"
             />
             <div className="gov-brand-text">
-              <span className="gov-karnataka-title" style={{ color: 'var(--gov-green)', letterSpacing: '0.05em' }}>
-                {isKannada ? 'ರೂರಲ್ ಕನೆಕ್ಟ್' : 'RURAL CONNECT'}
+              <span className="gov-karnataka-title" style={{ color: '#4c1d95', letterSpacing: '0.03em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{
+                  background: 'linear-gradient(135deg, #4c1d95 0%, #6b21a8 40%, #0284c7 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  fontWeight: 900
+                }}>
+                  {isKannada ? 'ಅರಿವುನೆಟ್ (ArivuNet)' : 'ArivuNet (ಅರಿವುನೆಟ್)'}
+                </span>
               </span>
-              <span className="gov-portal-name" style={{ fontSize: '0.98rem', fontWeight: 800 }}>
+              <span className="gov-portal-name" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.01em' }}>
                 {isKannada
-                  ? 'ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ — ಗ್ರಾಮೀಣ ಸಮುದಾಯಗಳಿಗೆ ನಿರಂತರ ಡಿಜಿಟಲ್ ಪ್ರವೇಶ'
-                  : 'OfflineBridge — Seamless Digital Access for Rural Communities'}
+                  ? 'ನಿಮ್ಮ ಹಕ್ಕುಗಳನ್ನು ತಿಳಿಯಿರಿ. ನಿಮ್ಮ ಸೇವೆಗಳನ್ನು ಪಡೆಯಿರಿ.'
+                  : 'Know Your Rights. Access Your Services.'}
               </span>
             </div>
           </Link>
@@ -209,6 +213,11 @@ export default function Navbar() {
               <span>{isKannada ? 'ಯೋಜನೆಗಳು' : 'SCHEMES & SERVICES'}</span>
             </Link>
 
+            <Link to="/finder" className={`gov-nav-item ${isActive('/finder') ? 'active' : ''}`}>
+              <Sparkles size={18} aria-hidden="true" color="#f59e0b" />
+              <span>{isKannada ? 'ನನಗಾಗಿ ಯೋಜನೆಗಳು' : 'FIND SCHEMES'}</span>
+            </Link>
+
             <Link to="/grievance" className={`gov-nav-item ${isActive('/grievance') ? 'active' : ''}`}>
               <AlertTriangle size={18} aria-hidden="true" />
               <span>{isKannada ? 'ದೂರುಗಳು' : 'GRIEVANCES'}</span>
@@ -226,29 +235,92 @@ export default function Navbar() {
               style={{ background: 'none', border: 'none', cursor: 'pointer' }}
             >
               <PhoneCall size={18} aria-hidden="true" />
-              <span>{isKannada ? 'ಸಹಾಯವಾಣಿ' : 'HELPLINE NUMBERS'}</span>
+              <span>{isKannada ? 'ಸಹಾಯವಾಣಿ' : 'HELPLINES'}</span>
             </button>
           </nav>
 
-          {/* Offline/Online Network Indicator Badge */}
-          <div
-            className={`gov-network-pill ${online ? 'online' : 'offline'}`}
-            role="status"
-            aria-live="polite"
-            title={online ? 'Online: System connected to Government Sync Server' : 'Offline: Saving drafts and submissions safely in local IndexedDB'}
-          >
-            <span className="pulse-circle" aria-hidden="true" />
-            {online ? (
-              <>
-                <Wifi size={15} />
-                <span>ONLINE</span>
-              </>
+          {/* User / Portal Role Action & Network Indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {isAuthenticated ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Link
+                  to={userRole === 'citizen' ? '/portal/citizen' : userRole === 'official' ? '/portal/official' : '/portal/admin'}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '5px 12px',
+                    borderRadius: '999px',
+                    backgroundColor: userRole === 'citizen' ? '#f0f9ff' : userRole === 'official' ? '#ecfdf5' : '#f5f3ff',
+                    border: `1px solid ${userRole === 'citizen' ? '#bae6fd' : userRole === 'official' ? '#a7f3d0' : '#ddd6fe'}`,
+                    color: userRole === 'citizen' ? '#0369a1' : userRole === 'official' ? '#047857' : '#6d28d9',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    textDecoration: 'none'
+                  }}
+                  title={`Active session: ${currentUser?.name || userRole}. Click to open workspace.`}
+                >
+                  <User size={13} />
+                  <span style={{ textTransform: 'capitalize' }}>{userRole} Desk</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={logout}
+                  title="Sign out of current workspace"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <LogOut size={15} />
+                </button>
+              </div>
             ) : (
-              <>
-                <WifiOff size={15} />
-                <span>OFFLINE MODE</span>
-              </>
+              <Link
+                to="/login"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  backgroundColor: 'var(--gov-blue-primary, #0284c7)',
+                  color: '#ffffff',
+                  borderRadius: '6px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  textDecoration: 'none'
+                }}
+              >
+                <LogIn size={13} />
+                <span>{isKannada ? 'ಲಾಗಿನ್' : 'Sign In'}</span>
+              </Link>
             )}
+
+            {/* Offline/Online Network Indicator Badge */}
+            <div
+              className={`gov-network-pill ${online ? 'online' : 'offline'}`}
+              role="status"
+              aria-live="polite"
+              title={online ? 'Online: System connected to Government Sync Server' : 'Offline: Saving drafts and submissions safely in local IndexedDB'}
+            >
+              <span className="pulse-circle" aria-hidden="true" />
+              {online ? (
+                <>
+                  <Wifi size={15} />
+                  <span>ONLINE</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff size={15} />
+                  <span>OFFLINE MODE</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -349,7 +421,7 @@ export default function Navbar() {
             <div className="modal-header">
               <h3>
                 <Building2 size={20} />
-                <span>About OfflineBridge — Rural Digital Services</span>
+                <span>About ArivuNet — Rural Digital Services</span>
               </h3>
               <button
                 type="button"
@@ -362,31 +434,45 @@ export default function Navbar() {
             </div>
             <div className="modal-body">
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <img src="/icons/karnataka-emblem.svg" alt="Emblem" style={{ width: '48px', height: '48px' }} />
+                <img src="/icons/arivunet-logo.svg" alt="ArivuNet Logo" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
                 <div>
-                  <h4 style={{ fontWeight: 800, color: 'var(--gov-blue-dark)' }}>
-                    Dept. of Rural Development & Panchayat Raj
+                  <h4 style={{ fontWeight: 800, color: '#4c1d95' }}>
+                    ArivuNet (ಅರಿವುನೆಟ್)
                   </h4>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Offline-First Citizen Service Delivery Initiative
+                  <p style={{ fontSize: '0.8rem', color: '#0284c7', fontWeight: 600 }}>
+                    Know Your Rights. Access Your Services.
                   </p>
                 </div>
               </div>
 
               <p style={{ marginBottom: '14px', fontSize: '0.92rem', lineHeight: '1.6' }}>
-                <strong>OfflineBridge</strong> is an offline-first Progressive Web App designed specifically for rural citizens in low-connectivity areas. It eliminates data loss during network dropouts by caching form schemas via <strong>Service Worker / Workbox</strong>, storing user drafts in <strong>IndexedDB (Dexie)</strong>, and orchestrating reliable background synchronization with a <strong>Node.js + PostgreSQL</strong> backend upon reconnection.
+                <strong>ArivuNet</strong> (<em>Arivu</em> means knowledge or awareness in Kannada) is an offline-first public service portal and digital inclusion initiative designed for citizens across rural Karnataka. It ensures reliable government scheme discovery, preparation of service applications, and civic grievance tracking even in remote areas facing zero or intermittent mobile network connectivity.
               </p>
 
-              <div style={{ backgroundColor: 'var(--bg-body)', padding: '14px', borderRadius: 'var(--radius-sm)', marginBottom: '16px' }}>
+              <div style={{ backgroundColor: 'var(--bg-body)', padding: '14px', borderRadius: 'var(--radius-sm)', marginBottom: '14px' }}>
                 <h5 style={{ fontWeight: 800, marginBottom: '8px', color: 'var(--gov-blue-dark)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Users size={16} /> Academic Project Credentials (Batch D4)
+                  <Shield size={16} color="var(--gov-blue-primary)" /> Key Architectural Pillars
                 </h5>
-                <p style={{ fontSize: '0.85rem' }}><strong>Institution:</strong> The National Institute of Engineering (NIE), Mysuru</p>
-                <p style={{ fontSize: '0.85rem' }}><strong>Department:</strong> Information Science and Engineering (ISE)</p>
-                <p style={{ fontSize: '0.85rem' }}><strong>Faculty Guide:</strong> Dr. S Kuzhalvaimozhi</p>
-                <p style={{ fontSize: '0.85rem', marginTop: '6px' }}>
-                  <strong>Student Team:</strong> Abhishek G.P, Mahesh M.S, Rajesh N, S M Shrivathsa Nonavinakere
-                </p>
+                <ul style={{ paddingLeft: '18px', fontSize: '0.82rem', lineHeight: '1.6', color: 'var(--text-subtle)' }}>
+                  <li><strong>Zero Data-Loss Guarantee:</strong> Form entries and draft inputs persist in the browser's local IndexedDB, surviving page reloads and sudden network disconnects.</li>
+                  <li><strong>Transparent Eligibility Discovery:</strong> Rule-based entitlement calculator evaluates criteria offline without requiring account passwords or cloud roundtrips.</li>
+                  <li><strong>Authoritative Information:</strong> Scheme specifications, eligibility rules, and required documents are referenced from published Karnataka portals (Seva Sindhu, Ahara, FRUITS, and Nadakacheri).</li>
+                </ul>
+              </div>
+
+              {/* Public Advisory & Independence Notice */}
+              <div style={{
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderLeft: '4px solid #0284c7',
+                padding: '10px 12px',
+                borderRadius: '4px',
+                fontSize: '0.78rem',
+                color: '#0369a1',
+                lineHeight: '1.45',
+                marginBottom: '16px'
+              }}>
+                <strong>Public Notice:</strong> ArivuNet is an independent digital empowerment initiative and is not an official government portal. Displaying a scheme in ArivuNet does not constitute official departmental sanction. Final application submissions and approvals are executed through authorized Karnataka government department systems.
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>

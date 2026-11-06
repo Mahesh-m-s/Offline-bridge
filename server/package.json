@@ -1,0 +1,23 @@
+{
+  "name": "arivunet-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ArivuNet — Backend API & Database Foundation for Rural Digital Services",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node test-phase3.js",
+    "migrate": "node src/db/migrate.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.12.0"
+  }
+}
