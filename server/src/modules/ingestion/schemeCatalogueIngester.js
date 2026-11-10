@@ -12,6 +12,7 @@
  * - Never fabricates non-existent deadlines or income thresholds.
  */
 
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { chunkDocument } from './chunker.js';
@@ -147,7 +148,20 @@ export async function ingestCatalogue(catalogue = null) {
   let items = catalogue;
 
   if (!items) {
-    const cataloguePath = path.resolve(__dirname, '../../../../client/src/data/schemesCatalogue.js');
+    const candidates = [
+      path.resolve(__dirname, '../../data/schemesCatalogue.js'),
+      path.resolve(__dirname, '../../../../client/src/data/schemesCatalogue.js')
+    ];
+    let cataloguePath = null;
+    for (const cand of candidates) {
+      if (fs.existsSync(cand)) {
+        cataloguePath = cand;
+        break;
+      }
+    }
+    if (!cataloguePath) {
+      cataloguePath = candidates[0];
+    }
     const imported = await import(`file://${cataloguePath.replace(/\\/g, '/')}`);
     items = imported.SCHEMES_CATALOGUE || [];
   }

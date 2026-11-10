@@ -1,0 +1,49 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies
+node_modules
+client/node_modules
+server/node_modules
+
+# Build artifacts
+client/dist
+client/dev-dist
+dist
+build
+coverage
+
+# Environment & local secret files
+.env
+.env.local
+.env.*.local
+*.local
+server/.env
+client/.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE & OS files
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.sw?
+
+# Documentation & raw media assets not needed in container images
+docs
+extracted_media
+patched_media
+.agents
+.codex
+*.sqlite
+*.sqlite3
+server/data
+implementation_plan.md
+test_write.txt
+
