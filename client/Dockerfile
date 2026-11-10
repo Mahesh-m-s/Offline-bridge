@@ -39,7 +39,7 @@ EXPOSE 80
 
 # Health check to ensure Nginx is healthy and serving HTML
 HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:80/ | grep -q 'ArivuNet' || exit 1
+  CMD wget -qO- http://127.0.0.1:80/ | grep -q 'OfflineBridge' || exit 1
 
 # Start Nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]

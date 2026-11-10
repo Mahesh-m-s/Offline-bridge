@@ -1,11 +1,19 @@
 import { Router } from 'express';
-import { handleGetAllSchemes, handleGetSchemeById, handleCreateOrUpdateScheme } from './schemes.controller.js';
+import { 
+  handleGetAllSchemes, 
+  handleGetSchemeById, 
+  handleGetSchemeStats, 
+  handleGetIngestionJobs,
+  handleGetAuditHealth,
+  handleTriggerIngestion,
+  handleCreateOrUpdateScheme 
+} from './schemes.controller.js';
 import { authenticate, requireRole } from '../../middleware/auth.js';
 import { SCHEME_ID_REGEX } from '../../middleware/validate.js';
 
 const router = Router();
 
-// Validate scheme ID parameter format exactly matching Phase 2 specification
+// Validate scheme ID parameter format
 function validateSchemeIdParam(req, res, next) {
   const { id } = req.params;
   if (!id || !SCHEME_ID_REGEX.test(id)) {
@@ -20,30 +28,25 @@ function validateSchemeIdParam(req, res, next) {
   next();
 }
 
-// Strictly enforce read-only access for unauthenticated calls and unsupported HTTP methods
-router.all(['/schemes', '/schemes/:id'], (req, res, next) => {
-  // Allow authenticated admin POST to create/update schemes
-  if (req.method === 'POST' && req.headers.authorization) {
-    return next();
-  }
+// 1. Statistics endpoint (must be declared before :id to prevent matching 'stats' as an id)
+router.get('/schemes/stats', handleGetSchemeStats);
 
-  if (req.method !== 'GET') {
-    return res.status(405).json({
-      success: false,
-      error: {
-        message: `Method ${req.method} is not allowed on ${req.baseUrl}${req.path}. This endpoint is strictly read-only.`,
-        code: 'METHOD_NOT_ALLOWED'
-      }
-    });
-  }
-  next();
-});
+// 2. Ingestion Jobs History endpoint (for admin dashboard monitoring)
+router.get('/schemes/ingestion-jobs', handleGetIngestionJobs);
 
-// Public read-only endpoints
+// 3. Data health & audit metrics endpoint
+router.get('/schemes/audit-health', handleGetAuditHealth);
+
+// 4. Trigger incremental ingestion endpoint
+router.post('/schemes/trigger-ingestion', authenticate, requireRole('admin'), handleTriggerIngestion);
+
+// 5. Public paginated/filtered schemes endpoint
 router.get('/schemes', handleGetAllSchemes);
+
+// 6. Scheme by ID endpoint
 router.get('/schemes/:id', validateSchemeIdParam, handleGetSchemeById);
 
-// Admin-only creation/update endpoint
+// 7. Administrative upsert endpoint
 router.post('/schemes', authenticate, requireRole('admin'), handleCreateOrUpdateScheme);
 
 export default router;

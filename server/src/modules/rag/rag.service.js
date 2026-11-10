@@ -181,13 +181,13 @@ export async function chatWithKnowledgeBase({ question, language = 'auto', conve
   // 2. Vector & Lexical Semantic Retrieval
   const relevantChunks = await retrieveRelevantChunks(sanitizedQuestion, {
     topK: 4,
-    minSimilarity: 0.20,
+    minSimilarity: 0.30,
     language: targetLang
   });
 
   // 3. Grounded No-Context Fallback for off-topic or low-confidence matches
   const maxSim = relevantChunks.length > 0 ? Math.max(...relevantChunks.map((c) => c.similarity || 0)) : 0;
-  if (!relevantChunks || relevantChunks.length === 0 || maxSim < 0.25) {
+  if (!relevantChunks || relevantChunks.length === 0 || maxSim < 0.35) {
     return {
       answer: targetLang === 'kn' ? NO_CONTEXT_KN : NO_CONTEXT_EN,
       language: targetLang,

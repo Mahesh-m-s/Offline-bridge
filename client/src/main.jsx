@@ -9,12 +9,12 @@ import { registerServiceWorker } from './registerServiceWorker';
 // Register Service Worker with lifecycle callbacks
 registerServiceWorker({
   onNeedRefresh(updateSW) {
-    if (confirm('A newer version of ArivuNet is available. Reload to update?')) {
+    if (confirm('A newer version of OfflineBridge is available. Reload to update?')) {
       updateSW(true);
     }
   },
   onOfflineReady() {
-    console.log('ArivuNet: App is cached and ready to run fully offline!');
+    console.log('OfflineBridge: App is cached and ready to run fully offline!');
   }
 });
 

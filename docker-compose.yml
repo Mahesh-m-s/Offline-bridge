@@ -4,10 +4,10 @@
 
 services:
   # ----------------------------------------------------------------------------
-  # 1. Database: PostgreSQL 16 Alpine
+  # 1. Database: PostgreSQL 16 with pgvector extension
   # ----------------------------------------------------------------------------
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: offlinebridge-postgres
     restart: unless-stopped
     environment:
@@ -81,7 +81,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ | grep -q 'ArivuNet' || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ | grep -q 'OfflineBridge' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

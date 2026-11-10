@@ -763,7 +763,7 @@ export default function TrackingPage() {
                   lineHeight: '1.5',
                   marginTop: '12px'
                 }}>
-                  <strong>Architectural Rule:</strong> ArivuNet strictly separates offline device drafts from verified server submissions. We do not display fabricated queue positions, fake approval statuses, or mocked application numbers.
+                  <strong>Architectural Rule:</strong> OfflineBridge strictly separates offline device drafts from verified server submissions. We do not display fabricated queue positions, fake approval statuses, or mocked application numbers.
                 </div>
               </div>
             </div>

@@ -99,7 +99,7 @@ export default function PortalLoginPage() {
           fontWeight: 700,
           marginBottom: '10px'
         }}>
-          <ShieldCheck size={16} /> ArivuNet Role-Based Access Framework
+          <ShieldCheck size={16} /> OfflineBridge Role-Based Access Framework
         </div>
         <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--gov-blue-dark, #0f172a)', margin: '0 0 8px 0' }}>
           {isKannada ? 'ಪೋರ್ಟಲ್ ಲಾಗಿನ್ ಮತ್ತು ಪ್ರವೇಶ' : 'Portal Sign In & Role Selection'}
@@ -107,7 +107,7 @@ export default function PortalLoginPage() {
         <p style={{ color: 'var(--text-muted, #64748b)', fontSize: '0.95rem', maxWidth: '640px', margin: '0 auto' }}>
           {isKannada
             ? 'ನಾಗರಿಕರು, ಪರಿಶೀಲನಾ ಅಧಿಕಾರಿಗಳು ಮತ್ತು ವ್ಯವಸ್ಥಾ ನಿರ್ವಾಹಕರಿಗೆ ಪ್ರತ್ಯೇಕ ಕೆಲಸದ ಸ್ಥಳಗಳನ್ನು ಒದಗಿಸಲಾಗಿದೆ.'
-            : 'Select your operational role below. ArivuNet establishes clear separation between public citizens, departmental scrutiny officers, and administrators.'}
+            : 'Select your operational role below. OfflineBridge establishes clear separation between public citizens, departmental scrutiny officers, and administrators.'}
         </p>
       </div>
 
@@ -574,7 +574,7 @@ export default function PortalLoginPage() {
         lineHeight: 1.55
       }}>
         <strong style={{ color: '#334155', display: 'block', marginBottom: '4px' }}>
-          ArivuNet Information Security & Integrity Principles:
+          OfflineBridge Information Security & Integrity Principles:
         </strong>
         No user passwords or private tokens are stored in the browser's persistent storage. Client-side route isolation separates citizen, scrutiny, and administrative views. Real-world transactional sanctioning will require signed JWT tokens validated against Neon PostgreSQL once backend authentication endpoints are deployed.
       </div>

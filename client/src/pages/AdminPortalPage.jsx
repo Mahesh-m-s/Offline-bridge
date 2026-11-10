@@ -191,7 +191,7 @@ export default function AdminPortalPage() {
               </span>
             </div>
             <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-              ArivuNet Rural Public Service Delivery System • Metadata & Policy Oversight
+              OfflineBridge Rural Public Service Delivery System • Metadata & Policy Oversight
             </p>
           </div>
         </div>

@@ -326,7 +326,7 @@ export async function apiRequest(endpoint, options = {}) {
       error: {
         message: isAborted
           ? 'API request timed out. The server may be unreachable.'
-          : 'Unable to connect to the ArivuNet server. Device may be offline.',
+          : 'Unable to connect to the OfflineBridge server. Device may be offline.',
         code: isAborted ? 'TIMEOUT' : 'NETWORK_ERROR'
       },
       isUnavailable: true,

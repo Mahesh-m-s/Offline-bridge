@@ -86,14 +86,14 @@ export default function App() {
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <img src="/icons/arivunet-logo.svg" alt="ArivuNet Logo" style={{ width: '38px', height: '38px' }} />
+              <img src="/icons/offlinebridge-logo.svg" alt="OfflineBridge Logo" style={{ width: '38px', height: '38px' }} />
               <div>
-                <h4 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 800 }}>ArivuNet (ಅರಿವುನೆಟ್)</h4>
+                <h4 style={{ color: '#ffffff', fontSize: '0.95rem', fontWeight: 800 }}>OfflineBridge</h4>
                 <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Rural Digital Services Platform — Karnataka</p>
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#cbd5e1', lineHeight: '1.4' }}>
-              ArivuNet provides uninterrupted government service delivery, scheme discovery, and grievance tracking for citizens under unstable connectivity conditions.
+              OfflineBridge provides uninterrupted government service delivery, scheme discovery, and grievance tracking for citizens under unstable connectivity conditions.
             </p>
           </div>
 
@@ -130,7 +130,7 @@ export default function App() {
           color: '#94a3b8',
           lineHeight: '1.5'
         }}>
-          ArivuNet (ಅರಿವುನೆಟ್) is an independent, offline-first public service portal and digital inclusion initiative. Not an official portal of the Government of Karnataka. Public scheme information referenced from authorized department sources.
+          OfflineBridge is an independent, offline-first public service portal and digital inclusion initiative. Not an official portal of the Government of Karnataka. Public scheme information referenced from authorized department sources.
         </div>
       </footer>
     </div>

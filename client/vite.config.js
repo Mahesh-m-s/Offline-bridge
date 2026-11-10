@@ -17,9 +17,9 @@ export default defineConfig({
       ],
       manifest: {
         id: '/',
-        name: 'ArivuNet — Know Your Rights. Access Your Services.',
-        short_name: 'ArivuNet',
-        description: 'ArivuNet: Offline-first PWA for rural digital services — know your rights, access your services.',
+        name: 'OfflineBridge — Know Your Rights. Access Your Services.',
+        short_name: 'OfflineBridge',
+        description: 'OfflineBridge: Offline-first PWA for rural digital services — know your rights, access your services.',
         theme_color: '#15803d',
         background_color: '#f8fafc',
         display: 'standalone',

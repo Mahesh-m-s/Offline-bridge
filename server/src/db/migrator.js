@@ -5,8 +5,9 @@
 
 import * as m001 from './migrations/001_initial_schema.js';
 import * as m002 from './migrations/002_phase3_security_and_idempotency.js';
+import * as m003 from './migrations/003_service_types_and_ingestion_tables.js';
 
-export const ALL_MIGRATIONS = [m001, m002];
+export const ALL_MIGRATIONS = [m001, m002, m003];
 
 /**
  * Ensure migrations ledger table exists

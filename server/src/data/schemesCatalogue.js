@@ -12,6 +12,8 @@
  * - Defines structured form fields for scheme-specific offline drafts.
  */
 
+import { EXPANDED_GOV_SCHEMES } from './expandedGovSchemes.js';
+
 export const KARNATAKA_DISTRICTS = [
   'Bagalkote',
   'Ballari',
@@ -57,7 +59,7 @@ export const CATEGORIES = [
   { id: 'it_services', title: 'IT & Digital Services', titleKn: 'ಡಿಜಿಟಲ್ / ದಾಖಲೆ ಸೇವೆಗಳು', sub: 'Kaveri, DigiLocker', subKn: 'ಕಾವೇರಿ, ಡಿಜಿಲಾಕರ್', icon: 'Monitor' }
 ];
 
-export const SCHEMES_CATALOGUE = [
+const BASE_SCHEMES = [
   // 1. Agriculture / Farmer (Preserves legacy ID: agri-seed-subsidy)
   {
     id: 'agri-seed-subsidy',
@@ -918,7 +920,7 @@ const SCHEME_EXTENDED_DETAILS = {
     intendedFor: 'Small and marginal farmers holding agricultural land registered in FRUITS.',
     intendedForKn: 'ಫ್ರೂಟ್ಸ್ ತಂತ್ರಾಂಶದಲ್ಲಿ ನೋಂದಾಯಿತ ಕೃಷಿ ಜಮೀನು ಹೊಂದಿರುವ ಸಣ್ಣ ಮತ್ತು ಅತಿ ಸಣ್ಣ ರೈತರು.',
     applicationProcedure: [
-      'Fill and save your application draft in ArivuNet completely offline.',
+      'Fill and save your application draft in OfflineBridge completely offline.',
       'Obtain or verify your 12-digit FRUITS Farmer ID (FID) at the nearest Raitha Samparka Kendra (RSK).',
       'Submit the verified draft details along with your RTC / Pahani record at your local RSK or Agriculture Assistant office before sowing season.',
       'Upon biometric verification, collect subsidised certified seeds directly from the RSK distribution counter.'
@@ -970,7 +972,7 @@ const SCHEME_EXTENDED_DETAILS = {
     intendedFor: 'Homeless rural families or residents living in kutcha/thatched dwellings with an active BPL ration card.',
     intendedForKn: 'ಗ್ರಾಮೀಣ ಪ್ರದೇಶದ ವಸತಿ ರಹಿತ ಬಿಪಿಎಲ್ ಕುಟುಂಬಗಳು.',
     applicationProcedure: [
-      'Prepare site and household draft details in ArivuNet.',
+      'Prepare site and household draft details in OfflineBridge.',
       'Ensure your name is included in the Gram Panchayat beneficiary waiting list (Ashraya list).',
       'Submit your application with GP Hakku Patra and BPL card to the Panchayat Development Officer (PDO).',
       'Gram Sabha approves beneficiary selection, followed by geo-tagging of the vacant site before stage-wise grant release.'
@@ -1128,13 +1130,29 @@ const SCHEME_EXTENDED_DETAILS = {
   }
 };
 
+// Normalize expanded schemes for 100% backward compatibility
+const normalizedExpanded = (EXPANDED_GOV_SCHEMES || []).map((s) => ({
+  ...s,
+  shortDesc: s.shortDesc || (typeof s.description === 'string' ? s.description : ''),
+  shortDescKn: s.shortDescKn || (typeof s.descriptionKn === 'string' ? s.descriptionKn : ''),
+  offlineReady: s.offlineReady !== false,
+  officialIntegrationAvailable: false,
+  beneficiaries: s.beneficiaries || s.categoryLabel || 'Eligible Citizens',
+  beneficiariesKn: s.beneficiariesKn || s.categoryLabelKn || 'ಅರ್ಹ ನಾಗರಿಕರು'
+}));
+
+export const SCHEMES_CATALOGUE = [
+  ...BASE_SCHEMES,
+  ...normalizedExpanded
+];
+
 // Merge extended details into every scheme object
 SCHEMES_CATALOGUE.forEach((scheme) => {
   const ext = SCHEME_EXTENDED_DETAILS[scheme.id] || {};
   scheme.intendedFor = ext.intendedFor || scheme.beneficiaries;
   scheme.intendedForKn = ext.intendedForKn || scheme.beneficiariesKn;
   scheme.applicationProcedure = ext.applicationProcedure || [
-    'Prepare application details and document readiness using the offline draft form in ArivuNet.',
+    'Prepare application details and document readiness using the offline draft form in OfflineBridge.',
     'Verify mandatory eligibility criteria and required documents checklist.',
     'Submit final application through the verified government department portal or at your local Grama One / Bangalore One centre.'
   ];
@@ -1144,7 +1162,7 @@ SCHEMES_CATALOGUE.forEach((scheme) => {
     {
       question: 'Is this an official government application submission?',
       questionKn: 'ಇದು ಅಧಿಕೃತ ಸರ್ಕಾರಿ ಸಲ್ಲಿಕೆಯಾಗಿದೆಯೇ?',
-      answer: 'No. ArivuNet is an offline-first guidance portal that preserves your application draft locally. Final submission must be completed via the verified government portal.',
+      answer: 'No. OfflineBridge is an offline-first guidance portal that preserves your application draft locally. Final submission must be completed via the verified government portal.',
       answerKn: 'ಇಲ್ಲ. ಇದು ಆಫ್‌ಲೈನ್ ಮಾರ್ಗದರ್ಶಿ ನಮೂನೆಯಾಗಿದೆ. ಅಧಿಕೃತ ಸಲ್ಲಿಕೆಯನ್ನು ಅಧಿಕೃತ ಇಲಾಖಾ ಪೋರ್ಟಲ್ ಮೂಲಕ ಪೂರ್ಣಗೊಳಿಸಬೇಕು.'
     }
   ];

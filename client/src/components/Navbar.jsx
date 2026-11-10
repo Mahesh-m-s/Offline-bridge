@@ -165,11 +165,11 @@ export default function Navbar() {
       {/* 2. MAIN BRAND NAVBAR (Clean White with Emblem) */}
       <header className="gov-brand-navbar" role="banner">
         <div className="gov-brand-container">
-          {/* ArivuNet Brand Logo & Title */}
-          <Link to="/" className="gov-brand-left" aria-label="ArivuNet Home">
+          {/* OfflineBridge Brand Logo & Title */}
+          <Link to="/" className="gov-brand-left" aria-label="OfflineBridge Home">
             <img
-              src="/icons/arivunet-logo.svg"
-              alt="ArivuNet Logo"
+              src="/icons/offlinebridge-logo.svg"
+              alt="OfflineBridge Logo"
               className="gov-emblem-img"
             />
             <div className="gov-brand-text">
@@ -180,7 +180,7 @@ export default function Navbar() {
                   WebkitTextFillColor: 'transparent',
                   fontWeight: 900
                 }}>
-                  {isKannada ? 'ಅರಿವುನೆಟ್ (ArivuNet)' : 'ArivuNet (ಅರಿವುನೆಟ್)'}
+                  {isKannada ? 'ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ (OfflineBridge)' : 'OfflineBridge'}
                 </span>
               </span>
               <span className="gov-portal-name" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.01em' }}>
@@ -421,7 +421,7 @@ export default function Navbar() {
             <div className="modal-header">
               <h3>
                 <Building2 size={20} />
-                <span>About ArivuNet — Rural Digital Services</span>
+                <span>About OfflineBridge — Rural Digital Services</span>
               </h3>
               <button
                 type="button"
@@ -434,10 +434,10 @@ export default function Navbar() {
             </div>
             <div className="modal-body">
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <img src="/icons/arivunet-logo.svg" alt="ArivuNet Logo" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
+                <img src="/icons/offlinebridge-logo.svg" alt="OfflineBridge Logo" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
                 <div>
                   <h4 style={{ fontWeight: 800, color: '#4c1d95' }}>
-                    ArivuNet (ಅರಿವುನೆಟ್)
+                    OfflineBridge
                   </h4>
                   <p style={{ fontSize: '0.8rem', color: '#0284c7', fontWeight: 600 }}>
                     Know Your Rights. Access Your Services.
@@ -446,7 +446,7 @@ export default function Navbar() {
               </div>
 
               <p style={{ marginBottom: '14px', fontSize: '0.92rem', lineHeight: '1.6' }}>
-                <strong>ArivuNet</strong> (<em>Arivu</em> means knowledge or awareness in Kannada) is an offline-first public service portal and digital inclusion initiative designed for citizens across rural Karnataka. It ensures reliable government scheme discovery, preparation of service applications, and civic grievance tracking even in remote areas facing zero or intermittent mobile network connectivity.
+                <strong>OfflineBridge</strong> is an offline-first public service portal and digital inclusion initiative designed for citizens across rural Karnataka. It ensures reliable government scheme discovery, preparation of service applications, and civic grievance tracking even in remote areas facing zero or intermittent mobile network connectivity.
               </p>
 
               <div style={{ backgroundColor: 'var(--bg-body)', padding: '14px', borderRadius: 'var(--radius-sm)', marginBottom: '14px' }}>
@@ -472,7 +472,7 @@ export default function Navbar() {
                 lineHeight: '1.45',
                 marginBottom: '16px'
               }}>
-                <strong>Public Notice:</strong> ArivuNet is an independent digital empowerment initiative and is not an official government portal. Displaying a scheme in ArivuNet does not constitute official departmental sanction. Final application submissions and approvals are executed through authorized Karnataka government department systems.
+                <strong>Public Notice:</strong> OfflineBridge is an independent digital empowerment initiative and is not an official government portal. Displaying a scheme in OfflineBridge does not constitute official departmental sanction. Final application submissions and approvals are executed through authorized Karnataka government department systems.
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>

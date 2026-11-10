@@ -431,8 +431,8 @@ export default function SchemeFinderPage() {
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
           {isKannada
-            ? 'ನಿಮ್ಮ ಪರಿಸ್ಥಿತಿಯ ಕುರಿತು ಸ್ವಲ್ಪ ಮಾಹಿತಿ ನೀಡಿ. ಅರಿವುನೆಟ್ ನಿಮ್ಮ ಅಗತ್ಯಗಳಿಗೆ ಸರಿಹೊಂದುವ ಸರ್ಕಾರಿ ಸೇವೆಗಳನ್ನು ಅನ್ವೇಷಿಸಲು ನೆರವಾಗುತ್ತದೆ.'
-            : 'Tell us a little about your situation. ArivuNet will help you discover services and schemes that may fit your needs.'}
+            ? 'ನಿಮ್ಮ ಪರಿಸ್ಥಿತಿಯ ಕುರಿತು ಸ್ವಲ್ಪ ಮಾಹಿತಿ ನೀಡಿ. ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ ನಿಮ್ಮ ಅಗತ್ಯಗಳಿಗೆ ಸರಿಹೊಂದುವ ಸರ್ಕಾರಿ ಸೇವೆಗಳನ್ನು ಅನ್ವೇಷಿಸಲು ನೆರವಾಗುತ್ತದೆ.'
+            : 'Tell us a little about your situation. OfflineBridge will help you discover services and schemes that may fit your needs.'}
         </p>
       </div>
 
@@ -700,7 +700,7 @@ export default function SchemeFinderPage() {
                       </strong>
                     </div>
                     <p style={{ fontSize: '0.78rem', color: '#92400e', margin: '0 0 12px 0', lineHeight: '1.4' }}>
-                      Tell us about your crop issue. ArivuNet will provide verified extension steps and contact points for Raitha Samparka Kendras. We do not invent chemical dosages or artificial diagnoses.
+                      Tell us about your crop issue. OfflineBridge will provide verified extension steps and contact points for Raitha Samparka Kendras. We do not invent chemical dosages or artificial diagnoses.
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '12px' }}>
@@ -1012,7 +1012,7 @@ export default function SchemeFinderPage() {
             {selectedSector === 'other' && (
               <div style={{ backgroundColor: 'var(--bg-body)', padding: '16px', borderRadius: '6px' }}>
                 <p style={{ fontSize: '0.86rem', color: 'var(--text-subtle)', margin: '0 0 10px 0' }}>
-                  ArivuNet provides offline preparation for Karnataka's key digital registries: <strong>Kaveri 2.0 Encumbrance Certificates</strong> and <strong>Food & Civil Supplies Ration Card Services</strong>. Click below to explore available services.
+                  OfflineBridge provides offline preparation for Karnataka's key digital registries: <strong>Kaveri 2.0 Encumbrance Certificates</strong> and <strong>Food & Civil Supplies Ration Card Services</strong>. Click below to explore available services.
                 </p>
               </div>
             )}
@@ -1147,7 +1147,7 @@ export default function SchemeFinderPage() {
                 color: '#991b1b',
                 lineHeight: '1.45'
               }}>
-                <strong>Safety Disclaimer:</strong> ArivuNet does not invent chemical pesticides, synthetic fertilizer dosages, or treatment schedules. Agricultural prescriptions must only be issued by an authorized Agriculture Officer at your local Raitha Samparka Kendra (RSK) or Krishi Vigyan Kendra (KVK).
+                <strong>Safety Disclaimer:</strong> OfflineBridge does not invent chemical pesticides, synthetic fertilizer dosages, or treatment schedules. Agricultural prescriptions must only be issued by an authorized Agriculture Officer at your local Raitha Samparka Kendra (RSK) or Krishi Vigyan Kendra (KVK).
               </div>
             </div>
           )}
@@ -1277,7 +1277,7 @@ export default function SchemeFinderPage() {
               <span>Privacy & Statutory Non-Sanction Advisory:</span>
             </div>
             <div>
-              Evaluated 100% locally on this device using published government criteria. ArivuNet never asks for Aadhaar numbers, passwords, or bank OTPs to discover schemes. <em>A potential match does not constitute official approval or guaranteed sanction. Official entitlement is determined solely by the competent department upon physical verification.</em>
+              Evaluated 100% locally on this device using published government criteria. OfflineBridge never asks for Aadhaar numbers, passwords, or bank OTPs to discover schemes. <em>A potential match does not constitute official approval or guaranteed sanction. Official entitlement is determined solely by the competent department upon physical verification.</em>
             </div>
           </div>
         </div>

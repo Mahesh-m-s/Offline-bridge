@@ -293,7 +293,7 @@ export default function HomePage() {
         </div>
         <div className="ticker-marquee-wrap">
           <span className="ticker-marquee-text">
-            📢 <strong>ArivuNet (ಅರಿವುನೆಟ್):</strong> {isKannada
+            📢 <strong>OfflineBridge:</strong> {isKannada
               ? 'ರೈತ ಸಿರಿ, ಸಂಧ್ಯಾ ಸುರಕ್ಷಾ, ಗೃಹಲಕ್ಷ್ಮಿ, ಯುವ ನಿಧಿ ಮತ್ತು ಪಡಿತರ ಚೀಟಿ ಸೇವೆಗಳನ್ನು ಅಂತರ್ಜಾಲವಿಲ್ಲದೆಯೂ ಭರ್ತಿ ಮಾಡಿ ಸುರಕ್ಷಿತವಾಗಿ ಸೇವ್ ಮಾಡಬಹುದು. ಸಂಪರ್ಕ ದೊರೆತಾಗ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನವೀಕರಣಗೊಳ್ಳುತ್ತದೆ.'
               : 'Citizen service applications, seed subsidies, and grievance submissions can now be filled 100% offline. Stored data auto-syncs securely once internet connectivity resumes.'} | 🌾 {isKannada ? 'ಕುಟುಂಬ ಅರ್ಹತಾ ನಿಯಮಗಳನ್ನು ಕಚೇರಿಗೆ ತೆರಳದೆ ಪರಿಶೀಲಿಸಿ.' : 'Check scheme eligibility under Kutumba rules without visiting government offices.'}
           </span>
@@ -339,8 +339,8 @@ export default function HomePage() {
               </h2>
               <p style={{ margin: '3px 0 0 0', fontSize: '0.86rem', color: '#475569' }}>
                 {isKannada
-                  ? 'ನಿಮ್ಮ ಪರಿಸ್ಥಿತಿಯ ಬಗ್ಗೆ ನಮಗೆ ತಿಳಿಸಿ. ನಿಮ್ಮ ಅಗತ್ಯಗಳಿಗೆ ಸರಿಹೊಂದುವ ಸೇವೆಗಳು ಮತ್ತು ಯೋಜನೆಗಳನ್ನು ಅರಿವುನೆಟ್ ನಿಮಗೆ ತೋರಿಸುತ್ತದೆ.'
-                  : 'Tell us a little about your situation. ArivuNet will help you discover services and schemes that may fit your needs.'}
+                  ? 'ನಿಮ್ಮ ಪರಿಸ್ಥಿತಿಯ ಬಗ್ಗೆ ನಮಗೆ ತಿಳಿಸಿ. ನಿಮ್ಮ ಅಗತ್ಯಗಳಿಗೆ ಸರಿಹೊಂದುವ ಸೇವೆಗಳು ಮತ್ತು ಯೋಜನೆಗಳನ್ನು ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ ನಿಮಗೆ ತೋರಿಸುತ್ತದೆ.'
+                  : 'Tell us a little about your situation. OfflineBridge will help you discover services and schemes that may fit your needs.'}
               </p>
             </div>
           </div>
@@ -648,10 +648,10 @@ export default function HomePage() {
             <div className="card" style={{ marginTop: '8px', borderLeft: '4px solid #6b21a8', backgroundColor: 'var(--surface-card)' }}>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--gov-blue-dark)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CheckCircle2 size={18} color="#06b6d4" />
-                <span>ArivuNet Synopsis & Technology Architecture</span>
+                <span>OfflineBridge Synopsis & Technology Architecture</span>
               </h3>
               <p style={{ fontSize: '0.86rem', color: 'var(--text-subtle)', lineHeight: '1.5', marginBottom: '12px' }}>
-                ArivuNet addresses connectivity drops for rural applicants. Built with <strong>React + Vite + Workbox Service Workers</strong>, <strong>Browser IndexedDB Layer</strong> for continuous draft preservation, and structured scheme-specific field definitions with verified Karnataka government requirements.
+                OfflineBridge addresses connectivity drops for rural applicants. Built with <strong>React + Vite + Workbox Service Workers</strong>, <strong>Browser IndexedDB Layer</strong> for continuous draft preservation, and structured scheme-specific field definitions with verified Karnataka government requirements.
               </p>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <Link to="/services" className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '8px 14px', minHeight: '38px' }}>

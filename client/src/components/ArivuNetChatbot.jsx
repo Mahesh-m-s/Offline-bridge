@@ -51,8 +51,8 @@ export default function ArivuNetChatbot() {
           id: 'welcome',
           sender: 'assistant',
           text: isKannada
-            ? 'ನಮಸ್ಕಾರ! ನಾನು ಅರಿವುನೆಟ್ AI (ArivuNet AI), ಕರ್ನಾಟಕ ಸರಕಾರದ ಕಲ್ಯಾಣ ಯೋಜನೆಗಳು, ವಿದ್ಯಾರ್ಥಿವೇತನ, ರೈತ ಸಹಾಯಧನ, ಸಾಮಾಜಿಕ ಪಿಂಚಣಿ ಮತ್ತು ನಾಗರಿಕ ಸೇವೆಗಳ ಬಗ್ಗೆ ನಿಮಗೆ ಅಧಿಕೃತ ಮಾರ್ಗದರ್ಶನ ನೀಡುತ್ತೇನೆ. ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ?'
-            : 'Namaskara! I am ArivuNet AI, your guide for Karnataka Government welfare schemes, scholarships, farmer subsidies, pensions, and citizen services. How can I help you today?',
+            ? 'ನಮಸ್ಕಾರ! ನಾನು ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ AI (OfflineBridge AI), ಕರ್ನಾಟಕ ಸರಕಾರದ ಕಲ್ಯಾಣ ಯೋಜನೆಗಳು, ವಿದ್ಯಾರ್ಥಿವೇತನ, ರೈತ ಸಹಾಯಧನ, ಸಾಮಾಜಿಕ ಪಿಂಚಣಿ ಮತ್ತು ನಾಗರಿಕ ಸೇವೆಗಳ ಬಗ್ಗೆ ನಿಮಗೆ ಅಧಿಕೃತ ಮಾರ್ಗದರ್ಶನ ನೀಡುತ್ತೇನೆ. ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ?'
+            : 'Namaskara! I am OfflineBridge AI, your guide for Karnataka Government welfare schemes, scholarships, farmer subsidies, pensions, and citizen services. How can I help you today?',
           sources: [],
           confidence: 'high',
           timestamp: new Date()
@@ -137,7 +137,7 @@ export default function ArivuNetChatbot() {
       } else {
         const errorMsg = response.error?.message || (isKannada
           ? 'ಪ್ರತಿಕ್ರಿಯೆ ಪಡೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಪುನಃ ಪ್ರಯತ್ನಿಸಿ.'
-          : 'Unable to get an answer from ArivuNet AI. Please try again.');
+          : 'Unable to get an answer from OfflineBridge AI. Please try again.');
 
         setActiveError({
           text: errorMsg,
@@ -226,8 +226,8 @@ export default function ArivuNetChatbot() {
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          aria-label={isOpen ? 'Close ArivuNet AI Chatbot' : 'Open ArivuNet AI Chatbot'}
-          title={isKannada ? 'ಅರಿವುನೆಟ್ AI ಸಹಾಯ' : 'Ask ArivuNet AI'}
+          aria-label={isOpen ? 'Close OfflineBridge AI Chatbot' : 'Open OfflineBridge AI Chatbot'}
+          title={isKannada ? 'ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ AI ಸಹಾಯ' : 'Ask OfflineBridge AI'}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -260,7 +260,7 @@ export default function ArivuNetChatbot() {
           >
             <Sparkles size={16} />
           </div>
-          <span>{isKannada ? 'ಅರಿವುನೆಟ್ AI ಸಹಾಯ' : 'Ask ArivuNet AI'}</span>
+          <span>{isKannada ? 'ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ AI ಸಹಾಯ' : 'Ask OfflineBridge AI'}</span>
           {isOpen ? <X size={16} style={{ marginLeft: '4px' }} /> : null}
         </button>
       </div>
@@ -270,7 +270,7 @@ export default function ArivuNetChatbot() {
         <div
           className="arivunet-chatbot-panel"
           role="dialog"
-          aria-label="ArivuNet AI Assistant"
+          aria-label="OfflineBridge AI Assistant"
           style={{
             position: 'fixed',
             bottom: '82px',
@@ -319,7 +319,7 @@ export default function ArivuNetChatbot() {
               </div>
               <div>
                 <h4 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#ffffff' }}>
-                  {isKannada ? 'ಅರಿವುನೆಟ್ AI ಸಹಾಯಕ' : 'ArivuNet AI Assistant'}
+                  {isKannada ? 'ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ AI ಸಹಾಯಕ' : 'OfflineBridge AI Assistant'}
                 </h4>
                 <p style={{ margin: 0, fontSize: '0.74rem', color: '#cbd5e1' }}>
                   {isKannada ? 'ಕರ್ನಾಟಕ ಸರಕಾರಿ ಯೋಜನೆಗಳ ಅಧಿಕೃತ ಮಾಹಿತಿ' : 'Grounded Karnataka Scheme Guidance'}
