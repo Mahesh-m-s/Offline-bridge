@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffd700" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#dc2626" />
+      <stop offset="100%" stop-color="#991b1b" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer Shield Ring -->
+  <circle cx="100" cy="105" r="88" fill="none" stroke="url(#goldGrad)" stroke-width="5" />
+  <circle cx="100" cy="105" r="82" fill="#7f1d1d" stroke="#fef08a" stroke-width="2" />
+  
+  <!-- Red Shield -->
+  <path d="M 60 70 Q 100 60 140 70 L 140 120 Q 100 165 60 120 Z" fill="url(#redGrad)" stroke="url(#goldGrad)" stroke-width="3" />
+  
+  <!-- Gandaberunda (Two-headed mythical bird of Karnataka) -->
+  <!-- Left Head & Beak -->
+  <path d="M 90 76 Q 80 65 72 72 Q 80 80 92 84 Z" fill="#ffd700" />
+  <!-- Right Head & Beak -->
+  <path d="M 110 76 Q 120 65 128 72 Q 120 80 108 84 Z" fill="#ffd700" />
+  <!-- Crown on Bird -->
+  <polygon points="100,60 92,72 108,72" fill="#ffd700" stroke="#b45309" stroke-width="1" />
+  <circle cx="100" cy="58" r="3" fill="#ffffff" />
+  <!-- Body and Wings -->
+  <path d="M 72 88 Q 50 96 64 120 Q 82 112 90 102 Z" fill="#ffd700" />
+  <path d="M 128 88 Q 150 96 136 120 Q 118 112 110 102 Z" fill="#ffd700" />
+  <!-- Central Chest -->
+  <ellipse cx="100" cy="98" rx="12" ry="16" fill="#fef08a" stroke="#b45309" stroke-width="1.5" />
+  <circle cx="100" cy="95" r="5" fill="#dc2626" />
+  <!-- Tail Feathers -->
+  <path d="M 94 116 L 85 138 L 100 132 L 115 138 L 106 116 Z" fill="#ffd700" />
+  
+  <!-- Flanking Sharabha / Lions (Golden supports) -->
+  <!-- Left Supporter -->
+  <path d="M 38 128 Q 30 95 50 82 Q 58 92 56 110 L 46 135 Z" fill="url(#goldGrad)" />
+  <circle cx="45" cy="85" r="7" fill="#f59e0b" />
+  <!-- Right Supporter -->
+  <path d="M 162 128 Q 170 95 150 82 Q 142 92 144 110 L 154 135 Z" fill="url(#goldGrad)" />
+  <circle cx="155" cy="85" r="7" fill="#f59e0b" />
+  
+  <!-- Ashoka Lion Capital Emblem at the Top Crest -->
+  <rect x="90" y="24" width="20" height="12" rx="3" fill="#f59e0b" />
+  <circle cx="100" cy="20" r="10" fill="#ffd700" stroke="#b45309" stroke-width="1.5" />
+  <circle cx="100" cy="20" r="4" fill="#1e3a8a" />
+  <rect x="85" y="34" width="30" height="4" fill="#ffffff" />
+  
+  <!-- Bottom Ribbon / Banner -->
+  <path d="M 35 158 Q 100 178 165 158 L 155 174 Q 100 190 45 174 Z" fill="#15803d" stroke="url(#goldGrad)" stroke-width="2" />
+  <text x="100" y="170" font-size="9" font-family="serif" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="1">ಸತ್ಯಮೇವ ಜಯತೇ</text>
+</svg>
