@@ -11,6 +11,7 @@ import syncRouter from './modules/sync/sync.routes.js';
 import ragRouter from './modules/rag/rag.routes.js';
 import ingestionRouter from './modules/ingestion/ingestion.routes.js';
 import auditRouter from './modules/audit/audit.routes.js';
+import { setupSwagger } from './config/swagger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -42,7 +43,10 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// 3. API Route Modules
+// 3. Mount Swagger UI / OpenAPI documentation at /api-docs and /api-docs.json
+setupSwagger(app);
+
+// 4. API Route Modules
 app.use('/api', healthRouter);
 app.use('/api', authRouter);
 app.use('/api', usersRouter);
