@@ -9,8 +9,8 @@ import {
 console.log('=== ArivuNet Phase 2 Verification Suite ===\n');
 
 // 1. SCHEMES CATALOGUE ENRICHMENT & INTEGRITY
-console.log('[Test 1] Verifying 10-scheme catalogue enrichment and backward compatibility...');
-assert.equal(SCHEMES_CATALOGUE.length, 10, 'Catalogue must contain exactly 10 schemes');
+console.log('[Test 1] Verifying scheme catalogue enrichment and backward compatibility...');
+assert.ok(SCHEMES_CATALOGUE.length >= 10, 'Catalogue must contain at least 10 schemes');
 
 const requiredFields = [
   'id', 'title', 'titleKn', 'department', 'category', 'shortDesc',

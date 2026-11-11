@@ -22,11 +22,17 @@ import {
   PhoneCall,
   Paperclip,
   X,
-  BookOpen
+  BookOpen,
+  Bot,
+  Send,
+  RefreshCw,
+  Building2,
+  ShieldCheck
 } from 'lucide-react';
 import { SCHEMES_CATALOGUE, KARNATAKA_DISTRICTS } from '../data/schemesCatalogue';
 import DraftFormModal from '../components/DraftFormModal';
 import { useLanguage } from '../context/LanguageContext';
+import { apiClient } from '../api/apiClient';
 
 export default function SchemeFinderPage() {
   const { isKannada, t } = useLanguage();
@@ -85,6 +91,91 @@ export default function SchemeFinderPage() {
   const [validationError, setValidationError] = useState('');
   const [selectedSchemeForDraft, setSelectedSchemeForDraft] = useState(null);
   const [selectedSchemeForDetails, setSelectedSchemeForDetails] = useState(null);
+
+  // Discovery Mode: 'questionnaire' | 'rag_assistant'
+  const [activeMode, setActiveMode] = useState(searchParams.get('mode') === 'ai' ? 'rag_assistant' : 'questionnaire');
+
+  // Grounded RAG Assistant State
+  const [ragQuery, setRagQuery] = useState('');
+  const [ragMessages, setRagMessages] = useState([]);
+  const [isRagLoading, setIsRagLoading] = useState(false);
+  const [ragError, setRagError] = useState(null);
+  const [ragConversationId, setRagConversationId] = useState(null);
+
+  const handleAskRag = async (queryText = null) => {
+    const textToSend = (queryText || ragQuery).trim();
+    if (!textToSend || isRagLoading) return;
+
+    setRagError(null);
+    setRagQuery('');
+
+    const userMsg = {
+      id: 'u-' + Date.now(),
+      sender: 'user',
+      text: textToSend,
+      timestamp: new Date()
+    };
+
+    setRagMessages((prev) => [...prev, userMsg]);
+    setIsRagLoading(true);
+
+    try {
+      const res = await apiClient.post('/api/rag/chat', {
+        question: textToSend,
+        language: isKannada ? 'kn' : 'en',
+        conversationId: ragConversationId
+      });
+
+      if (res.success && res.data) {
+        if (res.data.conversationId) setRagConversationId(res.data.conversationId);
+        setRagMessages((prev) => [
+          ...prev,
+          {
+            id: 'ai-' + Date.now(),
+            sender: 'assistant',
+            text: res.data.answer,
+            sources: res.data.sources || [],
+            confidence: res.data.confidence || 'high',
+            timestamp: new Date()
+          }
+        ]);
+      } else {
+        const errorMsg = res.error?.message || (isKannada
+          ? 'ಪ್ರತಿಕ್ರಿಯೆ ಪಡೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಪುನಃ ಪ್ರಯತ್ನಿಸಿ.'
+          : 'Unable to retrieve grounded scheme advice. Please try again.');
+        setRagError(errorMsg);
+        setRagMessages((prev) => [
+          ...prev,
+          {
+            id: 'err-' + Date.now(),
+            sender: 'assistant',
+            isError: true,
+            text: errorMsg,
+            sources: [],
+            timestamp: new Date()
+          }
+        ]);
+      }
+    } catch (err) {
+      const netMsg = isKannada
+        ? 'ಸರ್ವರ್ ಸಂಪರ್ಕ ವಿಫಲವಾಗಿದೆ. ನೆಟ್‌ವರ್ಕ್ ಪರಿಶೀಲಿಸಿ.'
+        : 'Network or server connection error. Please try again.';
+      setRagError(netMsg);
+      setRagMessages((prev) => [
+        ...prev,
+        {
+          id: 'err-' + Date.now(),
+          sender: 'assistant',
+          isError: true,
+          text: netMsg,
+          sources: [],
+          timestamp: new Date()
+        }
+      ]);
+    } finally {
+      setIsRagLoading(false);
+    }
+  };
 
   // If URL has sector, advance to step 2 automatically
   useEffect(() => {
@@ -436,7 +527,64 @@ export default function SchemeFinderPage() {
         </p>
       </div>
 
-      {/* Wizard Step Progress Tracker */}
+      {/* Mode Switcher: Guided Questionnaire vs RAG AI Assistant */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        backgroundColor: '#e2e8f0',
+        padding: '4px',
+        borderRadius: '10px',
+        width: 'fit-content',
+        marginBottom: '24px'
+      }}>
+        <button
+          type="button"
+          onClick={() => setActiveMode('questionnaire')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '8px',
+            fontSize: '0.86rem',
+            fontWeight: activeMode === 'questionnaire' ? 800 : 600,
+            backgroundColor: activeMode === 'questionnaire' ? '#ffffff' : 'transparent',
+            color: activeMode === 'questionnaire' ? 'var(--color-primary-navy, #102F56)' : '#64748b',
+            boxShadow: activeMode === 'questionnaire' ? '0 2px 6px rgba(16,47,86,0.1)' : 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <Layers size={16} />
+          <span>{isKannada ? 'ಮಾರ್ಗದರ್ಶಿ ಪ್ರಶ್ನಾವಳಿ' : 'Guided Questionnaire'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMode('rag_assistant')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '8px',
+            fontSize: '0.86rem',
+            fontWeight: activeMode === 'rag_assistant' ? 800 : 600,
+            backgroundColor: activeMode === 'rag_assistant' ? 'var(--color-primary-navy, #102F56)' : 'transparent',
+            color: activeMode === 'rag_assistant' ? '#ffffff' : '#64748b',
+            boxShadow: activeMode === 'rag_assistant' ? '0 2px 6px rgba(16,47,86,0.15)' : 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <Sparkles size={16} color={activeMode === 'rag_assistant' ? '#f59e0b' : '#64748b'} />
+          <span>{isKannada ? 'AI ಯೋಜನೆ ಸಹಾಯಕ (RAG)' : 'AI Scheme Advisor (RAG)'}</span>
+        </button>
+      </div>
+
+      {activeMode === 'questionnaire' && (
+        <>
+            {/* Wizard Step Progress Tracker */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -1279,6 +1427,291 @@ export default function SchemeFinderPage() {
             <div>
               Evaluated 100% locally on this device using published government criteria. OfflineBridge never asks for Aadhaar numbers, passwords, or bank OTPs to discover schemes. <em>A potential match does not constitute official approval or guaranteed sanction. Official entitlement is determined solely by the competent department upon physical verification.</em>
             </div>
+          </div>
+        </div>
+      )}
+
+        </>
+      )}
+
+      {/* RAG AI SCHEME ADVISOR VIEW */}
+      {activeMode === 'rag_assistant' && (
+        <div className="card" style={{ padding: '24px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '10px',
+              backgroundColor: 'var(--gov-blue-light, #ebf3fc)',
+              color: 'var(--color-primary-blue, #1556A0)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Bot size={24} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-primary-navy, #102F56)', margin: 0 }}>
+                {isKannada ? 'ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ ಗ್ರೌಂಡೆಡ್ RAG ಯೋಜನೆ ಸಹಾಯಕ' : 'OfflineBridge Grounded RAG Scheme Advisor'}
+              </h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary, #64748b)', margin: 0 }}>
+                {isKannada
+                  ? 'ಕರ್ನಾಟಕ ಸರ್ಕಾರದ ಅಧಿಕೃತ ದತ್ತಸಂಚಯ ಮತ್ತು ಇಲಾಖಾ ನಿಯಮಾವಳಿಗಳ ಆಧಾರದ ಮೇಲೆ ತಕ್ಷಣವೇ ಪರಿಶೀಲಿಸಿದ ಉತ್ತರಗಳನ್ನು ಪಡೆಯಿರಿ.'
+                  : 'Ask in plain English or Kannada. Answers are synthesized directly from verified Karnataka state portal sources with citations.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Starter Chips */}
+          <div style={{ marginBottom: '18px' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '8px' }}>
+              {isKannada ? 'ಸಾಮಾನ್ಯ ಪ್ರಶ್ನೆಗಳು (ಆಯ್ಕೆ ಮಾಡಲು ಕ್ಲಿಕ್ ಮಾಡಿ):' : 'Suggested citizen questions (click to ask):'}
+            </span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {(isKannada ? [
+                'ರೈತ ಸಿರಿ ಯೋಜನೆಯಡಿ ಸಣ್ಣ ರೈತರಿಗೆ ಬಿತ್ತನೆ ಬೀಜ ಸಹಾಯಧನ ಹೇಗೆ ಸಿಗುತ್ತದೆ?',
+                'ಗೃಹಲಕ್ಷ್ಮಿ ಯೋಜನೆಗೆ ಯಾರು ಅರ್ಹರು ಮತ್ತು ತಿಂಗಳಿಗೆ ಎಷ್ಟು ಹಣ ಸಿಗುತ್ತದೆ?',
+                'ಯುವ ನಿಧಿ ಯೋಜನೆಗೆ ಅರ್ಜಿ ಸಲ್ಲಿಸಲು ಶೈಕ್ಷಣಿಕ ಅರ್ಹತೆ ಏನು?',
+                'ಸಂಧ್ಯಾ ಸುರಕ್ಷಾ ಮಾಸಾಶನ ಪಡೆಯಲು ಆದಾಯ ಮಿತಿ ಎಷ್ಟು?',
+                'ಬಸವ ವಸತಿ ಯೋಜನೆಗೆ ಹಕ್ಕು ಪತ್ರ ಕಡ್ಡಾಯವೇ?'
+              ] : [
+                'How can small farmers receive seed subsidy under Raitha Siri?',
+                'Who is eligible for Gruha Lakshmi ₹2,000 monthly grant?',
+                'What are the eligibility criteria for Yuva Nidhi allowance?',
+                'What is the income ceiling for Sandhya Suraksha pension?',
+                'Is Hakku Patra mandatory for Basava Vasathi rural housing?'
+              ]).map((prompt, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleAskRag(prompt)}
+                  style={{
+                    backgroundColor: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '999px',
+                    padding: '6px 14px',
+                    fontSize: '0.78rem',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = '#e2e8f0';
+                    e.currentTarget.style.borderColor = '#94a3b8';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f1f5f9';
+                    e.currentTarget.style.borderColor = '#cbd5e1';
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Query Input Box */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleAskRag(); }}
+            style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}
+          >
+            <input
+              type="text"
+              value={ragQuery}
+              onChange={(e) => setRagQuery(e.target.value)}
+              placeholder={isKannada
+                ? 'ನಿಮ್ಮ ವಯಸ್ಸು, ಕೃಷಿ ಭೂಮಿ, ಆದಾಯ ಅಥವಾ ಅಗತ್ಯವಿರುವ ಯೋಜನೆಯನ್ನು ನಮೂದಿಸಿ...'
+                : 'Describe your situation (e.g. "I am a 66-year-old widow with no family income in Mandya")...'}
+              style={{
+                flex: 1,
+                padding: '12px 16px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.92rem',
+                fontFamily: 'inherit',
+                outline: 'none'
+              }}
+            />
+            <button
+              type="submit"
+              disabled={isRagLoading || !ragQuery.trim()}
+              className="btn btn-primary"
+              style={{ padding: '0 24px', fontSize: '0.9rem' }}
+            >
+              {isRagLoading ? (
+                <>
+                  <RefreshCw size={16} className="spin-animate" />
+                  <span>{isKannada ? 'ಹುಡುಕಲಾಗುತ್ತಿದೆ...' : 'Consulting DB...'}</span>
+                </>
+              ) : (
+                <>
+                  <Send size={16} />
+                  <span>{isKannada ? 'ಕೇಳಿ' : 'Ask Advisor'}</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Conversation Stream */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {ragMessages.length === 0 && (
+              <div style={{
+                textAlign: 'center',
+                padding: '36px 20px',
+                backgroundColor: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px dashed #cbd5e1'
+              }}>
+                <Sparkles size={28} color="#f59e0b" style={{ margin: '0 auto 10px' }} />
+                <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#102F56', margin: '0 0 6px 0' }}>
+                  {isKannada ? 'ಯೋಜನಾ AI ಸಲಹೆಗಾರ ಸಿದ್ಧವಾಗಿದೆ' : 'AI Scheme Advisor Ready'}
+                </h4>
+                <p style={{ fontSize: '0.84rem', color: '#64748b', maxWidth: '520px', margin: '0 auto' }}>
+                  {isKannada
+                    ? 'ಮೇಲಿನ ಸೂಚಿತ ಪ್ರಶ್ನೆಗಳಲ್ಲಿ ಒಂದನ್ನು ಕ್ಲಿಕ್ ಮಾಡಿ ಅಥವಾ ನಿಮ್ಮ ಅಗತ್ಯವನ್ನು ನಿಮ್ಮದೇ ಪದಗಳಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ.'
+                    : 'Click one of the suggested prompts above or type your family background in your own words to discover eligible schemes with statutory rules.'}
+                </p>
+              </div>
+            )}
+
+            {ragMessages.map((msg) => (
+              <div
+                key={msg.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: msg.sender === 'user' ? '80%' : '100%',
+                  width: msg.sender === 'assistant' ? '100%' : 'auto'
+                }}
+              >
+                {msg.sender === 'user' ? (
+                  <div style={{
+                    backgroundColor: 'var(--color-primary-navy, #102F56)',
+                    color: '#ffffff',
+                    padding: '12px 18px',
+                    borderRadius: '12px 12px 2px 12px',
+                    fontSize: '0.9rem',
+                    fontWeight: 500,
+                    lineHeight: 1.5
+                  }}>
+                    {msg.text}
+                  </div>
+                ) : (
+                  <div style={{
+                    backgroundColor: msg.isError ? '#fef2f2' : '#f8fafc',
+                    border: msg.isError ? '1px solid #fee2e2' : '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '18px 20px'
+                  }}>
+                    {/* Header: Bot badge + Confidence */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '6px',
+                          backgroundColor: '#1556A0',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Bot size={16} />
+                        </div>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#102F56' }}>
+                          OfflineBridge AI
+                        </span>
+                      </div>
+                      {!msg.isError && (
+                        <span style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          backgroundColor: '#dcfce7',
+                          color: '#16834a',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <ShieldCheck size={12} /> {isKannada ? 'ಅಧಿಕೃತ ಮೂಲಗಳಿಂದ ಪರಿಶೀಲಿಸಲಾಗಿದೆ' : 'Source-Grounded Response'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Answer Body */}
+                    <div style={{
+                      fontSize: '0.9rem',
+                      lineHeight: 1.6,
+                      color: msg.isError ? '#991b1b' : '#1e293b',
+                      whiteSpace: 'pre-wrap',
+                      marginBottom: msg.sources?.length > 0 ? '14px' : '0'
+                    }}>
+                      {msg.text}
+                    </div>
+
+                    {/* Source Citations */}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div style={{
+                        borderTop: '1px solid #e2e8f0',
+                        paddingTop: '12px',
+                        marginTop: '10px'
+                      }}>
+                        <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                          {isKannada ? 'ಅಧಿಕೃತ ಸರಕಾರಿ ಮೂಲಗಳು ಮತ್ತು ದಾಖಲೆಗಳು:' : 'Official Government Source Citations:'}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {msg.sources.map((src, sIdx) => (
+                            <div
+                              key={sIdx}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                padding: '6px 12px',
+                                fontSize: '0.78rem'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <FileText size={13} color="#1556A0" />
+                                <span style={{ fontWeight: 700, color: '#102F56' }}>{src.documentTitle || 'Government Portal'}</span>
+                                {src.department && (
+                                  <span style={{ color: '#64748b' }}>({src.department})</span>
+                                )}
+                              </div>
+                              {src.sourceUrl && (
+                                <a
+                                  href={src.sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    color: '#1556A0',
+                                    fontWeight: 700,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    textDecoration: 'none'
+                                  }}
+                                >
+                                  <span>{isKannada ? 'ಮೂಲ ಪರಿಶೀಲಿಸಿ' : 'Verify'}</span>
+                                  <ExternalLink size={12} />
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

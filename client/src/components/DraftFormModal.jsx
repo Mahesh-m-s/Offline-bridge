@@ -15,11 +15,19 @@ import {
   ExternalLink,
   ChevronRight,
   Eye,
-  Edit3
+  Edit3,
+  Send,
+  RefreshCw,
+  LogIn
 } from 'lucide-react';
 import { saveDraft, getDraft, deleteDraft } from '../offline/draftStorage';
 import { getCatalogueSchemeById, KARNATAKA_DISTRICTS } from '../data/schemesCatalogue';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { submitApplicationApi } from '../api/applications';
+import { queueApplicationForSync } from '../offline/syncQueue';
+import { isOnline } from '../registerServiceWorker';
+import { Link } from 'react-router-dom';
 
 export default function DraftFormModal({ service, onClose, onDraftChanged }) {
   const { isKannada, t } = useLanguage();
@@ -56,6 +64,13 @@ export default function DraftFormModal({ service, onClose, onDraftChanged }) {
   const [errorMessage, setErrorMessage] = useState('');
   const [hasStoredDraft, setHasStoredDraft] = useState(false);
   const [isRestored, setIsRestored] = useState(false);
+
+  const { currentUser, isAuthenticated } = useAuth();
+
+  // Real backend submission states
+  const [isSubmittingApp, setIsSubmittingApp] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submissionSuccess, setSubmissionSuccess] = useState(null);
 
   const debounceTimerRef = useRef(null);
 
@@ -246,6 +261,90 @@ export default function DraftFormModal({ service, onClose, onDraftChanged }) {
       clearTimeout(debounceTimerRef.current);
     }
     executeSave(formData);
+  };
+
+  // Submit application directly to backend API or queue for background sync
+  const handleOnlineSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateForm()) {
+      setViewMode('edit');
+      return;
+    }
+
+    setIsSubmittingApp(true);
+    setSubmitError('');
+
+    try {
+      if (!isAuthenticated) {
+        setSubmitError(isKannada
+          ? 'ಅಧಿಕೃತ ಸರ್ಕಾರಿ ಸರ್ವರ್‌ಗೆ ಸಲ್ಲಿಸಲು ದಯವಿಟ್ಟು ಲಾಗಿನ್ ಆಗಿ ಅಥವಾ ನೋಂದಾಯಿಸಿ.'
+          : 'Please sign in or register to submit directly to the government portal.');
+        setIsSubmittingApp(false);
+        return;
+      }
+
+      if (isOnline()) {
+        const clientSubmissionId = `APP-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const res = await submitApplicationApi({
+          schemeId: service.id,
+          localDraftId: service.id,
+          formData,
+          clientSubmissionId,
+          sourceProvenance: { userAgent: navigator.userAgent, submittedVia: 'DraftFormModal' }
+        });
+
+        if (res.success && res.data) {
+          setSubmissionSuccess({
+            referenceId: res.data.id,
+            clientSubmissionId,
+            status: res.data.status,
+            createdAt: res.data.created_at
+          });
+
+          await saveDraft(
+            service.id,
+            service.title || fullScheme?.title,
+            formData,
+            {
+              isSubmitted: true,
+              serverApplicationId: res.data.id,
+              submittedAt: new Date().toISOString()
+            }
+          );
+          if (onDraftChanged) onDraftChanged();
+        } else {
+          throw new Error(res.error?.message || 'Server rejected application submission.');
+        }
+      } else {
+        const clientSubmissionId = queueApplicationForSync({
+          schemeId: service.id,
+          localDraftId: service.id,
+          formData,
+          sourceProvenance: { offlineQueued: true }
+        });
+
+        setSubmissionSuccess({
+          referenceId: clientSubmissionId,
+          isOfflineQueued: true,
+          status: 'queued'
+        });
+
+        await saveDraft(
+          service.id,
+          service.title || fullScheme?.title,
+          formData,
+          {
+            queuedForSync: true,
+            clientSubmissionId
+          }
+        );
+        if (onDraftChanged) onDraftChanged();
+      }
+    } catch (err) {
+      setSubmitError(err.message || 'Failed to submit application.');
+    } finally {
+      setIsSubmittingApp(false);
+    }
   };
 
   // Delete draft from IndexedDB
@@ -1033,30 +1132,144 @@ export default function DraftFormModal({ service, onClose, onDraftChanged }) {
                 </div>
               )}
 
-              {/* Review Actions */}
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => setViewMode('edit')}
-                  style={{ fontSize: '0.85rem', padding: '8px 16px' }}
-                >
-                  ← Edit Details
-                </button>
+              {/* Submission Status Alerts */}
+              {submitError && (
+                <div style={{
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#B91C1C',
+                  padding: '12px 14px',
+                  borderRadius: '6px',
+                  marginBottom: '16px',
+                  fontSize: '0.86rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <AlertTriangle size={18} />
+                    <span>{submitError}</span>
+                  </div>
+                  {!isAuthenticated && (
+                    <Link
+                      to="/login"
+                      style={{
+                        backgroundColor: '#1556A0',
+                        color: '#FFFFFF',
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        textDecoration: 'none',
+                        fontSize: '0.78rem',
+                        fontWeight: 700
+                      }}
+                    >
+                      Sign In Now
+                    </Link>
+                  )}
+                </div>
+              )}
 
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={(e) => {
-                    handleManualSave(e);
-                    alert(isKannada ? 'ಡ್ರಾಫ್ಟ್ ಸ್ಥಳೀಯವಾಗಿ ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ!' : 'Draft successfully saved to local device!');
-                  }}
-                  style={{ fontSize: '0.85rem', padding: '8px 18px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Save size={15} />
-                  <span>Confirm & Save Draft</span>
-                </button>
-              </div>
+              {submissionSuccess && (
+                <div style={{
+                  backgroundColor: '#F0FDF4',
+                  border: '1px solid #BBF7D0',
+                  color: '#166534',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  marginBottom: '16px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, fontSize: '0.98rem', marginBottom: '6px' }}>
+                    <CheckCircle2 size={20} color="#16834A" />
+                    <span>
+                      {submissionSuccess.isOfflineQueued
+                        ? (isKannada ? 'ಅರ್ಜಿ ಹಿನ್ನೆಲೆ ಸಿಂಕ್‌ಗಾಗಿ ಸರದಿಯಲ್ಲಿದೆ!' : 'Application Queued for Background Sync!')
+                        : (isKannada ? 'ಅರ್ಜಿಯನ್ನು ಅಧಿಕೃತವಾಗಿ ಯಶಸ್ವಿಯಾಗಿ ಸಲ್ಲಿಸಲಾಗಿದೆ!' : 'Application Successfully Submitted to Server!')}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.84rem', color: '#14532D', marginBottom: '10px' }}>
+                    {submissionSuccess.isOfflineQueued
+                      ? (isKannada
+                          ? 'ಇಂಟರ್ನೆಟ್ ಸಂಪರ್ಕವಿಲ್ಲದ ಕಾರಣ ನಿಮ್ಮ ಅರ್ಜಿಯು ಸುರಕ್ಷಿತವಾಗಿ ಸೇವ್ ಆಗಿದೆ. ಸಂಪರ್ಕ ದೊರೆತಾಗ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಸರ್ವರ್‌ಗೆ ಸಲ್ಲಿಸಲಾಗುತ್ತದೆ.'
+                          : 'You are currently offline. Your application is safely preserved on this device and will auto-sync once internet connectivity resumes.')
+                      : (isKannada
+                          ? `ಅಧಿಕೃತ ಅರ್ಜಿ ಉಲ್ಲೇಖ ಸಂಖ್ಯೆ: ${submissionSuccess.referenceId}. ಈ ಸಂಖ್ಯೆಯನ್ನು ಟ್ರ್ಯಾಕಿಂಗ್‌ಗಾಗಿ ಬಳಸಬಹುದು.`
+                          : `Official Government Application Reference ID: ${submissionSuccess.referenceId}. You can track status anytime.`)}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Link
+                      to="/tracking"
+                      className="btn btn-outline"
+                      style={{ fontSize: '0.8rem', padding: '4px 10px', textDecoration: 'none' }}
+                    >
+                      Track in Tracking Desk →
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={onClose}
+                      style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                    >
+                      Close Window
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Review Actions */}
+              {!submissionSuccess && (
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setViewMode('edit')}
+                    style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+                  >
+                    ← Edit Details
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={(e) => {
+                      handleManualSave(e);
+                      alert(isKannada ? 'ಡ್ರಾಫ್ಟ್ ಸ್ಥಳೀಯವಾಗಿ ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ!' : 'Draft successfully saved to local device!');
+                    }}
+                    style={{ fontSize: '0.85rem', padding: '8px 16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Save size={15} />
+                    <span>Save Draft Locally</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={isSubmittingApp}
+                    onClick={handleOnlineSubmit}
+                    style={{
+                      fontSize: '0.85rem',
+                      padding: '8px 20px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: '#16834A',
+                      borderColor: '#16834A'
+                    }}
+                  >
+                    {isSubmittingApp ? (
+                      <>
+                        <RefreshCw size={15} className="spin-animate" />
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={15} />
+                        <span>Submit to Government Server</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

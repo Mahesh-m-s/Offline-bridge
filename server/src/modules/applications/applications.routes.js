@@ -6,7 +6,7 @@ import {
   handleGetApplicationById,
   handleListApplications
 } from './applications.controller.js';
-import { authenticate, requireRole } from '../../middleware/auth.js';
+import { authenticate, optionalAuthenticate, requireRole } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 
 const router = Router();
@@ -32,7 +32,7 @@ const updateStatusSchema = {
 
 const appIdParamSchema = {
   params: {
-    id: { required: true, isUuid: true }
+    id: { required: true, type: 'string', minLength: 1, maxLength: 100 }
   }
 };
 
@@ -45,8 +45,8 @@ router.get('/applications/my', authenticate, handleGetMyApplications);
 // 3. Official & Admin view all applications queue
 router.get('/applications', authenticate, requireRole(['official', 'admin']), handleListApplications);
 
-// 4. View application by ID (Enforces citizen can ONLY view their own; official/admin can view all)
-router.get('/applications/:id', authenticate, validate(appIdParamSchema), handleGetApplicationById);
+// 4. View application by ID or reference (Public tracking or authenticated detail)
+router.get('/applications/:id', optionalAuthenticate, validate(appIdParamSchema), handleGetApplicationById);
 
 // 5. Official & Admin update application status
 router.patch('/applications/:id/status', authenticate, requireRole(['official', 'admin']), validate(updateStatusSchema), handleUpdateStatus);

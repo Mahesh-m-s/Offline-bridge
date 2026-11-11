@@ -157,3 +157,28 @@ export async function updateGrievanceStatus({ grievanceId, status, remarks, offi
   return updated;
 }
 
+export async function getGrievanceById(grievanceId, requestingUser = null) {
+  const pool = getPool();
+  const query = `
+    SELECT g.id, g.user_id, g.category, g.description, g.village_panchayat, g.contact_phone,
+           g.status, g.client_submission_id, g.created_at, g.updated_at,
+           u.full_name as complainant_name
+    FROM grievances g
+    LEFT JOIN users u ON g.user_id = u.id
+    WHERE g.id::text = $1 OR g.client_submission_id = $1
+    LIMIT 1
+  `;
+  const result = await pool.query(query, [grievanceId.trim()]);
+  const grv = result.rows[0];
+  if (!grv) return null;
+
+  if (requestingUser && requestingUser.role === 'citizen' && grv.user_id && String(grv.user_id) !== String(requestingUser.id)) {
+    const err = new Error('Access forbidden. You do not have permission to view another citizen’s grievance.');
+    err.code = 'FORBIDDEN';
+    err.status = 403;
+    throw err;
+  }
+
+  return grv;
+}
+

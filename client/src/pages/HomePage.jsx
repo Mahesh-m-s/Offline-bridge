@@ -1,781 +1,1407 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ChevronRight as ArrowRightIcon,
+  Search,
+  ArrowRight,
   ShieldCheck,
+  Wifi,
   WifiOff,
   Sprout,
   Briefcase,
   Users,
   Monitor,
   HeartPulse,
-  Compass,
   GraduationCap,
-  BookOpen,
-  CheckCircle2,
-  AlertTriangle,
-  ExternalLink,
-  Layers,
   Home as HomeIcon,
   ShoppingBag,
-  FileText,
+  Layers,
   FileCheck,
-  XCircle,
-  ArrowRight,
-  Sparkles
+  FileText,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  AlertTriangle,
+  ChevronRight,
+  Sparkles,
+  Building2,
+  FileBadge,
+  Award,
+  Database,
+  Compass,
+  PhoneCall,
+  Check
 } from 'lucide-react';
 import { SCHEMES_CATALOGUE, getCatalogueSchemeById } from '../data/schemesCatalogue';
 import { getAllDrafts } from '../offline/draftStorage';
+import { fetchSchemeStats } from '../api/schemes';
 import DraftFormModal from '../components/DraftFormModal';
 import { useLanguage } from '../context/LanguageContext';
+import { isOnline, setupNetworkListeners } from '../registerServiceWorker';
 
 export default function HomePage() {
   const { isKannada, t } = useLanguage();
   const navigate = useNavigate();
 
-  // Hero slider state
-  const [currentSlide, setCurrentSlide] = useState(0);
-  // Selected category in left sidebar (defaults to 'all' to show all sector cards, or citizen category)
+  // Network connectivity state
+  const [online, setOnline] = useState(isOnline());
+
+  // Search input state in Hero
+  const [heroSearch, setHeroSearch] = useState('');
+
+  // Selected category in category selector
   const [selectedCategory, setSelectedCategory] = useState('all');
-  // Saved draft IDs from IndexedDB
+
+  // Saved draft IDs from local IndexedDB
   const [savedDraftIds, setSavedDraftIds] = useState(new Set());
-  // Active modal scheme for direct drafting from homepage
+
+  // Active modal scheme for direct application drafting
   const [activeModalScheme, setActiveModalScheme] = useState(null);
 
-  // Scheme/service slides
-  const slides = [
-    {
-      id: 'agriculture-support',
-      title: 'Agriculture Support — Raitha Siri & Seed Subsidies',
-      titleKn: 'ಕೃಷಿ ಸಹಾಯ — ರೈತ ಸಿರಿ ಮತ್ತು ಬಿತ್ತನೆ ಬೀಜ ಸಹಾಯಧನ',
-      desc: 'Subsidised seasonal crop seeds, millet cultivation allowances, and direct farmer welfare support with complete offline application readiness.',
-      descKn: 'ಅಧಿಸೂಚಿತ ಬೆಳೆಗಳಿಗೆ ಪ್ರಮಾಣೀಕೃತ ಬೀಜ ಮತ್ತು ರಸಗೊಬ್ಬರ ಸಹಾಯಧನ ಹಾಗೂ ಆಫ್‌ಲೈನ್ ನಮೂನೆ ಸೌಲಭ್ಯ.',
-      actionText: 'Explore Schemes',
-      actionTextKn: 'ಯೋಜನೆಗಳನ್ನು ನೋಡಿ',
-      actionLink: '/services',
-      image: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=1400&q=80',
-      fallbackBg: 'linear-gradient(135deg, #064e3b, #1e3a8a)'
+  // Live database statistics
+  const [stats, setStats] = useState({
+    totalRecords: 1060,
+    byServiceType: {
+      scheme: 350,
+      service: 667,
+      certificate: 36,
+      welfare_benefit: 7
     },
-    {
-      id: 'education-scholarships',
-      title: 'Education & Scholarships — SSP & Yuva Nidhi',
-      titleKn: 'ಶಿಕ್ಷಣ ಮತ್ತು ಯುವಜನ ಕಲ್ಯಾಣ — SSP ಮತ್ತು ಯುವ ನಿಧಿ',
-      desc: 'Post-matric educational grants, Vidyasiri fee reimbursement, and graduate unemployment allowances for eligible youth across Karnataka.',
-      descKn: 'ಮೆಟ್ರಿಕ್ ನಂತರದ ವಿದ್ಯಾರ್ಥಿವೇತನ, ಶುಲ್ಕ ಮರುಪಾವತಿ ಮತ್ತು ಪದವೀಧರ ಯುವಕರಿಗೆ ಮಾಸಿಕ ಭತ್ಯೆ.',
-      actionText: 'Check Eligibility',
-      actionTextKn: 'ಅರ್ಹತೆ ಪರಿಶೀಲಿಸಿ',
-      actionLink: '/eligibility',
-      image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1400&q=80',
-      fallbackBg: 'linear-gradient(135deg, #1e1b4b, #1d4ed8)'
-    },
-    {
-      id: 'pensions-welfare',
-      title: 'Pensions & Social Welfare — Sandhya Suraksha',
-      titleKn: 'ಪಿಂಚಣಿ ಮತ್ತು ಸಾಮಾಜಿಕ ಭದ್ರತೆ — ಸಂಧ್ಯಾ ಸುರಕ್ಷಾ',
-      desc: 'Monthly financial assistance and subsistence allowances for elderly citizens, destitute widows, and rural persons with disability.',
-      descKn: 'ಹಿರಿಯ ನಾಗರಿಕರಿಗೆ, ಅಂಗವಿಕಲರಿಗೆ ಮತ್ತು ವಿಧವೆಯರಿಗೆ ಮಾಸಿಕ ₹1,200 ಸಾಮಾಜಿಕ ಭದ್ರತಾ ಪಿಂಚಣಿ.',
-      actionText: 'Explore Schemes',
-      actionTextKn: 'ಯೋಜನೆಗಳನ್ನು ನೋಡಿ',
-      actionLink: '/services',
-      image: 'https://images.unsplash.com/photo-1516307365426-bea591f05011?auto=format&fit=crop&w=1400&q=80',
-      fallbackBg: 'linear-gradient(135deg, #701a75, #831843)'
-    },
-    {
-      id: 'rural-housing',
-      title: 'Rural Housing Assistance — Basava Vasathi Yojana',
-      titleKn: 'ಗ್ರಾಮೀಣ ವಸತಿ ನೆರವು — ಬಸವ ವಸತಿ ಯೋಜನೆ',
-      desc: 'Capital grants under Basava Vasathi and rural housing schemes for constructing permanent, disaster-resilient houses for rural BPL families.',
-      descKn: 'ಗ್ರಾಮೀಣ ವಸತಿ ರಹಿತ ಬಿಪಿಎಲ್ ಕುಟುಂಬಗಳಿಗೆ ಪಕ್ಕಾ ಮನೆ ನಿರ್ಮಾಣಕ್ಕಾಗಿ ₹1.20 ಲಕ್ಷ ಅನುದಾನ.',
-      actionText: 'Explore Schemes',
-      actionTextKn: 'ಯೋಜನೆಗಳನ್ನು ನೋಡಿ',
-      actionLink: '/services',
-      image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1400&q=80',
-      fallbackBg: 'linear-gradient(135deg, #854d0e, #78350f)'
-    }
-  ];
+    byCategory: {}
+  });
+
+  // Listen to network status changes
+  useEffect(() => {
+    const cleanup = setupNetworkListeners((status) => {
+      setOnline(status);
+    });
+    return cleanup;
+  }, []);
 
   // Refresh saved drafts from IndexedDB
-  const refreshDrafts = async () => {
+  const refreshDrafts = useCallback(async () => {
     try {
       const drafts = await getAllDrafts();
-      const ids = new Set(drafts.map((d) => d.serviceId || d.id));
+      const ids = new Set((drafts || []).map((d) => d.serviceId || d.id));
       setSavedDraftIds(ids);
     } catch (err) {
       console.warn('Failed to load drafts on HomePage:', err);
     }
-  };
-
-  useEffect(() => {
-    refreshDrafts();
   }, []);
 
-  // Auto-advance hero slides every 6 seconds
+  // Fetch live stats from PostgreSQL API
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, [slides.length]);
+    refreshDrafts();
+    let isMounted = true;
+    async function loadLiveStats() {
+      try {
+        const res = await fetchSchemeStats();
+        if (res.success && res.data && isMounted) {
+          setStats(res.data);
+        }
+      } catch (err) {
+        console.warn('Unable to load live stats from server:', err);
+      }
+    }
+    loadLiveStats();
+    return () => { isMounted = false; };
+  }, [refreshDrafts]);
 
-  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % slides.length);
-  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+  // Handle Hero search submit
+  const handleHeroSearch = (e) => {
+    e.preventDefault();
+    if (heroSearch.trim()) {
+      navigate(`/services?search=${encodeURIComponent(heroSearch.trim())}`);
+    } else {
+      navigate('/services');
+    }
+  };
 
-  // Left sidebar category definitions matching user screenshot & requirements
-  const categories = [
-    { id: 'all', title: 'All Services / ಎಲ್ಲಾ ಸೇವೆಗಳು', sub: 'Complete Catalogue', icon: Layers },
-    { id: 'farmer', title: 'Farmer / ರೈತ', sub: 'Seed, Crop, Subsidy', icon: Sprout },
-    { id: 'citizen', title: 'Citizen / ನಾಗರಿಕ', sub: 'Ration, Pension, Guarantee', icon: Users },
-    { id: 'housing', title: 'Rural Housing / ವಸತಿ', sub: 'Basava Vasathi, Pucca Home', icon: HomeIcon },
-    { id: 'food', title: 'Food & Supplies / ಆಹಾರ', sub: 'Ahara, BPL Ration Card', icon: ShoppingBag },
-    { id: 'student', title: 'Youth & Student / ಯುವಜನ', sub: 'Scholarships, Yuva Nidhi', icon: GraduationCap },
-    { id: 'health', title: 'Health Services / ಆರೋಗ್ಯ', sub: 'Arogya, PHC Services', icon: HeartPulse },
-    { id: 'business', title: 'Business / MSME / ಉದ್ಯಮಿ', sub: 'Artisans, Micro Subsidy', icon: Briefcase },
-    { id: 'it_services', title: 'IT Services / ಐಟಿ ಸೇವೆ', sub: 'DigiLocker, Kaveri', icon: Monitor }
-  ];
-
-  // Exact 6 taxonomy cards matching reference layout
-  const sectorCards = [
+  // 8 High-Impact DPI Sector Cards with verified metadata and live counts
+  const sectorCategories = [
     {
-      id: 'card-1',
-      schemeId: 'agri-seed-subsidy',
-      title: 'AGRICULTURE & HORTICULTURE',
-      titleKn: 'ಕೃಷಿ ಮತ್ತು ತೋಟಗಾರಿಕೆ',
-      subtitle: 'Raitha Siri, Seed Subsidies, FRUITS & Micro-Irrigation',
-      subtitleKn: 'ರೈತ ಸಿರಿ, ಬಿತ್ತನೆ ಬೀಜ ಸಹಾಯಧನ, ಫ್ರೂಟ್ಸ್ ಮತ್ತು ನೀರಾವರಿ',
-      badge: 'Offline-Ready Form',
-      image: 'https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=700&q=80',
-      link: '/services?category=farmer'
+      id: 'farmer',
+      title: 'Farmer & Agriculture',
+      titleKn: 'ರೈತ ಮತ್ತು ಕೃಷಿ',
+      count: stats.byCategory?.farmer || 24,
+      desc: 'Raitha Siri, seed subsidies, FRUITS registration, PM-KUSUM & micro-irrigation.',
+      descKn: 'ರೈತ ಸಿರಿ, ಬಿತ್ತನೆ ಬೀಜ ಸಹಾಯಧನ, ಫ್ರೂಟ್ಸ್ ನೋಂದಣಿ ಮತ್ತು ಹನಿ ನೀರಾವರಿ.',
+      icon: Sprout,
+      color: '#16834A',
+      bgColor: '#F0FDF4',
+      badge: 'Sakala Guaranteed'
     },
     {
-      id: 'card-2',
-      schemeId: 'rural-housing-assist',
-      title: 'RURAL HOUSING & WELFARE',
-      titleKn: 'ಗ್ರಾಮೀಣ ವಸತಿ ಮತ್ತು ಕಲ್ಯಾಣ',
-      subtitle: 'Basava Vasathi Yojana, Dr. B.R. Ambedkar Rural Pucca Homes',
-      subtitleKn: 'ಬಸವ ವಸತಿ ಯೋಜನೆ, ಗ್ರಾಮೀಣ ಪಕ್ಕಾ ಮನೆ ನಿರ್ಮಾಣ ಅನುದಾನ',
-      badge: 'Offline-Ready Form',
-      image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=700&q=80',
-      link: '/services?category=housing'
+      id: 'citizen',
+      title: 'Citizen & Social Welfare',
+      titleKn: 'ನಾಗರಿಕ ಮತ್ತು ಸಮಾಜ ಕಲ್ಯಾಣ',
+      count: stats.byCategory?.citizen || 18,
+      desc: 'Sandhya Suraksha, Gruha Lakshmi, disability allowances, pensions & widow welfare.',
+      descKn: 'ಸಂಧ್ಯಾ ಸುರಕ್ಷಾ, ಗೃಹಲಕ್ಷ್ಮಿ, ಮಾಸಾಶನ ಮತ್ತು ವಿಧವಾ ವೇತನ ಯೋಜನೆಗಳು.',
+      icon: Users,
+      color: '#1556A0',
+      bgColor: '#EFF6FF',
+      badge: 'Direct Benefit'
     },
     {
-      id: 'card-3',
-      schemeId: 'ssp-scholarship',
-      title: 'HIGHER EDUCATION & SCHOLARSHIPS',
-      titleKn: 'ಉನ್ನತ ಶಿಕ್ಷಣ ಮತ್ತು ವಿದ್ಯಾರ್ಥಿವೇತನ',
-      subtitle: 'SSP Post-Matric, Vidyasiri, and Yuva Nidhi Grant Schemes',
-      subtitleKn: 'SSP ಮೆಟ್ರಿಕ್ ನಂತರದ ವಿದ್ಯಾರ್ಥಿವೇತನ ಮತ್ತು ಯುವ ನಿಧಿ ಯೋಜನೆ',
-      badge: 'Instant Rule Check',
-      image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=700&q=80',
-      link: '/eligibility'
+      id: 'housing',
+      title: 'Rural Housing',
+      titleKn: 'ಗ್ರಾಮೀಣ ವಸತಿ',
+      count: stats.byCategory?.housing || 12,
+      desc: 'Basava Vasathi, Dr. B.R. Ambedkar Rural Pucca Homes & site allotment grants.',
+      descKn: 'ಬಸವ ವಸತಿ ಯೋಜನೆ, ಗ್ರಾಮೀಣ ಪಕ್ಕಾ ಮನೆ ನಿರ್ಮಾಣ ಮತ್ತು ನಿವೇಶನ ಮಂಜೂರಾತಿ.',
+      icon: HomeIcon,
+      color: '#D99016',
+      bgColor: '#FEFCE8',
+      badge: 'Gram Panchayat'
     },
     {
-      id: 'card-4',
-      schemeId: 'arogya-karnataka',
-      title: 'PUBLIC HEALTH & AYUSHMAN',
-      titleKn: 'ಸಾರ್ವಜನಿಕ ಆರೋಗ್ಯ ಮತ್ತು ಚಿಕಿತ್ಸೆ',
-      subtitle: 'Arogya Karnataka (SAST), Cashless Treatment Cover up to ₹5 Lakh',
-      subtitleKn: 'ಆರೋಗ್ಯ ಕರ್ನಾಟಕ, ನಗದು ರಹಿತ ಚಿಕಿತ್ಸಾ ಭದ್ರತೆ',
-      badge: 'Offline-Ready Form',
-      image: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=700&q=80',
-      link: '/services?category=health'
+      id: 'food',
+      title: 'Food & Civil Supplies',
+      titleKn: 'ಆಹಾರ ಮತ್ತು ನಾಗರಿಕ ಸರಬರಾಜು',
+      count: stats.byCategory?.food || 14,
+      desc: 'Annabhagya, BPL/AAY ration card issuance, member additions & Fair Price shops.',
+      descKn: 'ಅನ್ನಭಾಗ್ಯ, ಬಿಪಿಎಲ್ ಪಡಿತರ ಚೀಟಿ, ಸದಸ್ಯರ ಸೇರ್ಪಡೆ ಮತ್ತು ನ್ಯಾಯಬೆಲೆ ಅಂಗಡಿ ಸೇವೆ.',
+      icon: ShoppingBag,
+      color: '#EA580C',
+      bgColor: '#FFF7ED',
+      badge: 'Biometric Ready'
     },
     {
-      id: 'card-5',
-      schemeId: 'msme-artisan-subsidy',
-      title: 'RURAL INDUSTRIES & KHADI',
-      titleKn: 'ಗ್ರಾಮೀಣ ಉದ್ದಿಮೆ ಮತ್ತು ಕರಕುಶಲ',
-      subtitle: 'Support for MSME, local artisans, and rural cottage enterprises',
-      subtitleKn: 'ಕರಕುಶಲ ಕರ್ಮಿಗಳು ಮತ್ತು ಕಿರು ಉದ್ಯಮಗಳಿಗೆ ಬಂಡವಾಳ ಸಹಾಯಧನ',
-      badge: 'Offline-Ready Form',
-      image: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=700&q=80',
-      link: '/services?category=business'
+      id: 'student',
+      title: 'Youth & Education',
+      titleKn: 'ಯುವಜನ ಮತ್ತು ಶಿಕ್ಷಣ',
+      count: stats.byCategory?.student || 16,
+      desc: 'SSP Post-Matric, Vidyasiri fee concessions, hostel admissions & Yuva Nidhi.',
+      descKn: 'SSP ಮೆಟ್ರಿಕ್ ನಂತರದ ವಿದ್ಯಾರ್ಥಿವೇತನ, ವಿದ್ಯಾಸಿರಿ ಶುಲ್ಕ ವಿನಾಯಿತಿ ಮತ್ತು ಯುವ ನಿಧಿ.',
+      icon: GraduationCap,
+      color: '#7C3AED',
+      bgColor: '#F5F3FF',
+      badge: 'Direct Bank Transfer'
     },
     {
-      id: 'card-6',
-      schemeId: null,
-      title: 'JANASPANDANA GRIEVANCE DESK',
-      titleKn: 'ಜನಸ್ಪಂದನ ಸಾರ್ವಜನಿಕ ದೂರು ವಿಭಾಗ',
-      subtitle: 'Report local water shortages, ration irregularities, or road issues',
-      subtitleKn: 'ಕುಡಿಯುವ ನೀರು, ಪಡಿತರ ವ್ಯತ್ಯಯ, ರಸ್ತೆ ಸಮಸ್ಯೆಗಳ ಆಫ್‌ಲೈನ್ ದೂರು ಸಲ್ಲಿಕೆ',
-      badge: 'Offline Filing & Sync',
-      image: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=700&q=80',
-      link: '/grievance'
+      id: 'health',
+      title: 'Health & Medical',
+      titleKn: 'ಆರೋಗ್ಯ ಸೇವೆಗಳು',
+      count: stats.byCategory?.health || 10,
+      desc: 'Arogya Karnataka, Ayushman Bharat cashless care, maternity benefits & PHCs.',
+      descKn: 'ಆರೋಗ್ಯ ಕರ್ನಾಟಕ, ಆಯುಷ್ಮಾನ್ ಭಾರತ್ ₹5 ಲಕ್ಷ ನಗದು ರಹಿತ ಚಿಕಿತ್ಸೆ ಮತ್ತು ತಾಯಿ ಮಗು ಕಲ್ಯಾಣ.',
+      icon: HeartPulse,
+      color: '#E11D48',
+      bgColor: '#FFF1F2',
+      badge: 'Hospital Network'
+    },
+    {
+      id: 'business',
+      title: 'MSME & Rural Enterprise',
+      titleKn: 'ಉದ್ಯಮ ಮತ್ತು ಕೈಗಾರಿಕೆ',
+      count: stats.byCategory?.business || 12,
+      desc: 'Cottage artisan loans, Khadi subsidies, PM Vishwakarma & micro-credit.',
+      descKn: 'ಕರಕುಶಲ ಕರ್ಮಿಗಳ ಸಾಲ, ಖಾದಿ ಸಹಾಯಧನ, ಪಿಎಂ ವಿಶ್ವಕರ್ಮ ಮತ್ತು ಕಿರು ಉದ್ಯಮ ಬೆಂಬಲ.',
+      icon: Briefcase,
+      color: '#0891B2',
+      bgColor: '#ECFEFF',
+      badge: 'Margin Subsidy'
+    },
+    {
+      id: 'it_services',
+      title: 'Revenue & Certificates',
+      titleKn: 'ಕಂದಾಯ ಮತ್ತು ಪ್ರಮಾಣಪತ್ರ',
+      count: stats.byCategory?.it_services || 36,
+      desc: 'Caste & Income certificates, RTC Pahani land records, Kaveri 2.0 & Nada Kacheri.',
+      descKn: 'ಜಾತಿ, ಆದಾಯ ಪ್ರಮಾಣಪತ್ರ, ಆರ್‌ಟಿಸಿ ಪಹಣಿ, ಕಾವೇರಿ 2.0 ನೋಂದಣಿ ಮತ್ತು ನಾಡ ಕಚೇರಿ ಸೇವೆ.',
+      icon: Monitor,
+      color: '#4B5563',
+      bgColor: '#F3F4F6',
+      badge: 'Digitally Signed'
     }
   ];
 
-  // Filtered schemes when a specific category is active
-  const filteredSchemes = selectedCategory === 'all'
-    ? []
-    : SCHEMES_CATALOGUE.filter((s) => s.category === selectedCategory);
+  // Top Verified Schemes for Quick Application / Drafting
+  const featuredSchemes = [
+    {
+      id: 'agri-seed-subsidy',
+      title: 'Raitha Siri & Seasonal Crop Seed Subsidy',
+      titleKn: 'ರೈತ ಸಿರಿ ಮತ್ತು ಬಿತ್ತನೆ ಬೀಜ ಸಹಾಯಧನ ಯೋಜನೆ',
+      department: 'Department of Agriculture, Govt. of Karnataka',
+      departmentKn: 'ಕೃಷಿ ಇಲಾಖೆ, ಕರ್ನಾಟಕ ಸರ್ಕಾರ',
+      category: 'farmer',
+      serviceType: 'scheme',
+      serviceCode: 'AGR001',
+      slaDays: 7,
+      benefitSummary: '50% subsidy on certified seeds up to ₹10,000/ha direct into bank account via DBT.',
+      benefitSummaryKn: 'ಪ್ರಮಾಣೀಕೃತ ಬೀಜಗಳಿಗೆ ಶೇ.50 ರಷ್ಟು ಸಹಾಯಧನ, ಗರಿಷ್ಠ ₹10,000/ಹೆಕ್ಟೇರ್ ಡಿಬಿಟಿ ಮೂಲಕ.',
+      eligibility: 'Resident Karnataka farmers owning agricultural land with active FRUITS FID.'
+    },
+    {
+      id: 'sandhya-suraksha',
+      title: 'Sandhya Suraksha Social Pension Scheme',
+      titleKn: 'ಸಂಧ್ಯಾ ಸುರಕ್ಷಾ ಸಾಮಾಜಿಕ ಪಿಂಚಣಿ ಯೋಜನೆ',
+      department: 'Directorate of Social Security and Pensions',
+      departmentKn: 'ಸಾಮಾಜಿಕ ಭದ್ರತೆ ಮತ್ತು ಪಿಂಚಣಿಗಳ ನಿರ್ದೇಶನಾಲಯ',
+      category: 'citizen',
+      serviceType: 'welfare_benefit',
+      serviceCode: 'REV004',
+      slaDays: 30,
+      benefitSummary: 'Monthly financial assistance of ₹1,200 deposited directly into savings account.',
+      benefitSummaryKn: 'ಅರ್ಹ ಹಿರಿಯ ನಾಗರಿಕರಿಗೆ ಪ್ರತಿ ತಿಂಗಳು ₹1,200 ನೇರ ಸಾಮಾಜಿಕ ಪಿಂಚಣಿ.',
+      eligibility: 'Karnataka residents aged 65 or above with annual family income under ₹32,000.'
+    },
+    {
+      id: 'ssp-scholarship',
+      title: 'SSP Post-Matric Scholarship & Vidyasiri',
+      titleKn: 'SSP ಮೆಟ್ರಿಕ್ ನಂತರದ ವಿದ್ಯಾರ್ಥಿವೇತನ ಮತ್ತು ವಿದ್ಯಾಸಿರಿ',
+      department: 'Department of Social Welfare & Backward Classes',
+      departmentKn: 'ಸಮಾಜ ಕಲ್ಯಾಣ ಮತ್ತು ಹಿಂದುಳಿದ ವರ್ಗಗಳ ಕಲ್ಯಾಣ ಇಲಾಖೆ',
+      category: 'student',
+      serviceType: 'scheme',
+      serviceCode: 'SWD001',
+      slaDays: 21,
+      benefitSummary: 'Full tuition fee reimbursement + monthly maintenance allowance up to ₹1,500/month.',
+      benefitSummaryKn: 'ಸಂಪೂರ್ಣ ಬೋಧನಾ ಶುಲ್ಕ ಮರುಪಾವತಿ ಮತ್ತು ಮಾಸಿಕ ನಿರ್ವಹಣಾ ಭತ್ಯೆ.',
+      eligibility: 'SC/ST/OBC students pursuing PUC, Diploma, ITI, Degree or PG with Kutumba ID.'
+    },
+    {
+      id: 'caste-income-cert',
+      title: 'Statutory Caste & Income Certificate (Form-F)',
+      titleKn: 'ಜಾತಿ ಮತ್ತು ಆದಾಯ ಪ್ರಮಾಣಪತ್ರ (ನಮೂನೆ-ಎಫ್)',
+      department: 'Department of Revenue (Nada Kacheri / Atalji Janasnehi)',
+      departmentKn: 'ಕಂದಾಯ ಇಲಾಖೆ (ನಾಡ ಕಚೇರಿ / ಅಟಲ್‌ಜೀ ಜನಸ್ನೇಹಿ)',
+      category: 'it_services',
+      serviceType: 'certificate',
+      serviceCode: 'REV001',
+      slaDays: 15,
+      benefitSummary: 'Legally certified digitally signed document with QR code validity for 5 years.',
+      benefitSummaryKn: '5 ವರ್ಷಗಳ ಮಾನ್ಯತೆಯುಳ್ಳ ಡಿಜಿಟಲ್ ಸಹಿ ಮತ್ತು ಕ್ಯೂಆರ್ ಕೋಡ್ ಸಹಿತ ಪ್ರಮಾಣಪತ್ರ.',
+      eligibility: 'All bonafide permanent residents of Karnataka requiring reservation or benefits.'
+    },
+    {
+      id: 'gruha-lakshmi',
+      title: 'Gruha Lakshmi Direct Cash Assistance Scheme',
+      titleKn: 'ಗೃಹಲಕ್ಷ್ಮಿ ನೇರ ನಗದು ವರ್ಗಾವಣೆ ಯೋಜನೆ',
+      department: 'Department of Women & Child Development',
+      departmentKn: 'ಮಹಿಳಾ ಮತ್ತು ಮಕ್ಕಳ ಅಭಿವೃದ್ಧಿ ಇಲಾಖೆ',
+      category: 'citizen',
+      serviceType: 'welfare_benefit',
+      serviceCode: 'WCD001',
+      slaDays: 14,
+      benefitSummary: 'Monthly guaranteed financial grant of ₹2,000 for female head of household.',
+      benefitSummaryKn: 'ಕುಟುಂಬದ ಯಜಮಾನಿ ಮಹಿಳೆಗೆ ಪ್ರತಿ ತಿಂಗಳು ₹2,000 ಖಾತರಿಗೆ ನಗದು ಜಮೆ.',
+      eligibility: 'Women named as head of family in Karnataka BPL/AAY/APL ration cards (non-taxpayers).'
+    },
+    {
+      id: 'rural-housing-assist',
+      title: 'Basava Vasathi Yojana — Rural Pucca Housing',
+      titleKn: 'ಬಸವ ವಸತಿ ಯೋಜನೆ — ಗ್ರಾಮೀಣ ಪಕ್ಕಾ ವಸತಿ ನಿರ್ಮಾಣ',
+      department: 'Rajiv Gandhi Housing Corporation Ltd.',
+      departmentKn: 'ರಾಜೀವ್ ಗಾಂಧಿ ಗ್ರಾಮೀಣ ವಸತಿ ನಿಗಮ ನಿಯಮಿತ',
+      category: 'housing',
+      serviceType: 'scheme',
+      serviceCode: 'HOU001',
+      slaDays: 45,
+      benefitSummary: 'Subsidy grant of ₹1.20 Lakh released in 4 geo-tagged construction stages.',
+      benefitSummaryKn: '₹1.20 ಲಕ್ಷ ಸಹಾಯಧನ ಜಿಯೋ-ಟ್ಯಾಗ್ ಮಾಡಿದ 4 ಹಂತಗಳಲ್ಲಿ ನೇರ ಖಾತೆಗೆ.',
+      eligibility: 'Rural homeless BPL families possessing registered site with Hakku Patra.'
+    }
+  ];
 
-  const activeCategoryObj = categories.find((c) => c.id === selectedCategory);
+  // Official Digital Public Infrastructure Links
+  const officialPortals = [
+    {
+      name: 'Seva Sindhu',
+      nameKn: 'ಸೇವಾ ಸಿಂಧು',
+      sub: 'One-stop portal for Karnataka citizen delivery',
+      url: 'https://sevasindhu.karnataka.gov.in',
+      tag: 'Citizen Services'
+    },
+    {
+      name: 'Sakala Mission',
+      nameKn: 'ಸಕಾಲ ಮಿಷನ್',
+      sub: 'Guaranteed time-bound service delivery with penalties',
+      url: 'http://sakala.kar.nic.in',
+      tag: 'Legal Right'
+    },
+    {
+      name: 'Nada Kacheri (AJKS)',
+      nameKn: 'ನಾಡ ಕಚೇರಿ',
+      sub: 'Atalji Janasnehi Kendra for Revenue Certificates',
+      url: 'https://nadakacheri.karnataka.gov.in',
+      tag: 'Certificates'
+    },
+    {
+      name: 'FRUITS Portal',
+      nameKn: 'ಫ್ರೂಟ್ಸ್ ಪೋರ್ಟಲ್',
+      sub: 'Farmer Registration and Beneficiary Identification',
+      url: 'https://fruits.karnataka.gov.in',
+      tag: 'Farmer DB'
+    },
+    {
+      name: 'SSP Karnataka',
+      nameKn: 'ರಾಜ್ಯ ವಿದ್ಯಾರ್ಥಿವೇತನ ತಂತ್ರಾಂಶ',
+      sub: 'State Scholarship Portal for Post-Matric & Pre-Matric',
+      url: 'https://ssp.postmatric.karnataka.gov.in',
+      tag: 'Scholarships'
+    },
+    {
+      name: 'Kaveri 2.0',
+      nameKn: 'ಕಾವೇರಿ ೨.೦',
+      sub: 'Online property valuation & document registration',
+      url: 'https://kaveri.karnataka.gov.in',
+      tag: 'Property / Land'
+    },
+    {
+      name: 'Ahara Karnataka',
+      nameKn: 'ಆಹಾರ ಇಲಾಖೆ',
+      sub: 'Food & Civil Supplies BPL/AAY Ration management',
+      url: 'https://ahara.kar.nic.in',
+      tag: 'Food Security'
+    },
+    {
+      name: 'DigiLocker India',
+      nameKn: 'ಡಿಜಿಲಾಕರ್',
+      sub: 'Digital Public Infrastructure for authentic documents',
+      url: 'https://www.digilocker.gov.in',
+      tag: 'National DPI'
+    }
+  ];
 
   return (
-    <div className="home-portal-view">
-      {/* 1. HERO SECTION WITH WIDE CAROUSEL */}
-      <section className="hero-slider-section" aria-label="Rural Schemes and Digital Services Carousel">
-        <div className="hero-slide-wrap">
-          <img
-            src={slides[currentSlide].image}
-            alt={slides[currentSlide].title}
-            className="hero-slide-img"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement.style.background = slides[currentSlide].fallbackBg;
-            }}
-          />
+    <div className="home-portal-view" style={{ backgroundColor: 'var(--color-bg, #F5F7FA)', minHeight: '100vh', paddingBottom: '48px' }}>
+      
+      {/* 1. HERO SECTION: Clean SaaS + Indian DPI Aesthetic */}
+      <section style={{
+        background: 'linear-gradient(135deg, #102F56 0%, #1556A0 65%, #1B4070 100%)',
+        color: '#FFFFFF',
+        padding: '36px 16px 44px',
+        borderBottom: '4px solid #D99016',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Soft background grid pattern */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+          pointerEvents: 'none'
+        }} />
 
-          <div className="hero-gradient-overlay" />
+        <div style={{ maxWidth: '1280px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '32px',
+            alignItems: 'center'
+          }}>
+            {/* Left Column: Heading, Value Prop, Search & CTAs */}
+            <div>
+              {/* Official DPI Pill */}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                padding: '6px 14px',
+                borderRadius: '9999px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                letterSpacing: '0.02em',
+                marginBottom: '16px',
+                color: '#FEF08A'
+              }}>
+                <span>🇮🇳</span>
+                <span>{isKannada ? 'ಕರ್ನಾಟಕ ಸರ್ಕಾರದ ಡಿಜಿಟಲ್ ಸಾರ್ವಜನಿಕ ಮೂಲಸೌಕರ್ಯ' : 'Official Digital Public Infrastructure · Karnataka'}</span>
+                <span style={{ opacity: 0.5 }}>|</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <WifiOff size={13} /> {isKannada ? '೧೦೦% ಆಫ್‌ಲೈನ್ ಸಕ್ರಿಯ' : '100% Offline-First'}
+                </span>
+              </div>
 
-          {/* Slider Controls */}
-          <button
-            type="button"
-            className="slider-arrow-btn prev"
-            onClick={prevSlide}
-            aria-label="Previous Slide"
-          >
-            <ChevronLeft size={22} />
-          </button>
-          <button
-            type="button"
-            className="slider-arrow-btn next"
-            onClick={nextSlide}
-            aria-label="Next Slide"
-          >
-            <ChevronRight size={22} />
-          </button>
+              {/* Primary Headline */}
+              <h1 style={{
+                fontSize: 'clamp(1.75rem, 3.5vw, 2.5rem)',
+                fontWeight: 800,
+                lineHeight: 1.25,
+                color: '#FFFFFF',
+                margin: '0 0 14px 0',
+                letterSpacing: '-0.02em'
+              }}>
+                {isKannada
+                  ? 'ಗ್ರಾಮೀಣ ನಾಗರಿಕರಿಗೆ ನಿರಂತರ, ಖಾತರಿಯ ಸರ್ಕಾರಿ ಸೇವೆಗಳು.'
+                  : 'Guaranteed Government Services. Zero Dropouts. Even Offline.'}
+              </h1>
 
-          {/* Slide Caption */}
-          <div className="hero-caption hero-caption-full">
-            <h1 className="hero-heritage-title">
-              {t(slides[currentSlide].title, slides[currentSlide].titleKn)}
-            </h1>
-            <p className="hero-portal-desc">
-              {t(slides[currentSlide].desc, slides[currentSlide].descKn)}
-            </p>
-            <div className="hero-badge-row" style={{ alignItems: 'center' }}>
-              <Link to={slides[currentSlide].actionLink} className="btn-hero-action">
-                <span>{t(slides[currentSlide].actionText, slides[currentSlide].actionTextKn)}</span>
-                <ArrowRightIcon size={14} />
-              </Link>
-              <span className="hero-chip">
-                <WifiOff size={14} /> {isKannada ? '100% ಆಫ್‌ಲೈನ್ ಸಕ್ರಿಯ' : '100% Offline-First Enabled'}
-              </span>
-              <span className="hero-chip" style={{ backgroundColor: '#0284c7', borderColor: '#38bdf8' }}>
-                <ShieldCheck size={14} /> {isKannada ? 'ಸ್ಥಳೀಯ ಡ್ರಾಫ್ಟ್ ರಕ್ಷಣೆ' : 'Local Draft Preservation'}
-              </span>
+              {/* Subtitle */}
+              <p style={{
+                fontSize: 'clamp(0.95rem, 1.5vw, 1.08rem)',
+                lineHeight: 1.55,
+                color: 'rgba(255, 255, 255, 0.9)',
+                margin: '0 0 24px 0',
+                maxWidth: '620px'
+              }}>
+                {isKannada
+                  ? 'ಕರ್ನಾಟಕದ ೧,೦೬೦+ ಅಧಿಕೃತ ಕಲ್ಯಾಣ ಯೋಜನೆಗಳು, ಪ್ರಮಾಣಪತ್ರಗಳು ಮತ್ತು ನಾಗರಿಕ ಸೇವೆಗಳನ್ನು ಅಂತರ್ಜಾಲವಿಲ್ಲದೆಯೂ ಸುಲಭವಾಗಿ ಪಡೆಯಿರಿ. ನಿಮ್ಮ ಅರ್ಜಿಯ ಮಾಹಿತಿಯು ಸ್ಥಳೀಯವಾಗಿ ಸುರಕ್ಷಿತವಾಗಿರುತ್ತದೆ.'
+                  : 'Access 1,060+ verified Karnataka welfare schemes, statutory certificates, and citizen services. Fill applications without internet, preserve drafts in IndexedDB, and auto-sync securely once connected.'}
+              </p>
+
+              {/* Hero Search Bar */}
+              <form onSubmit={handleHeroSearch} style={{
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '10px',
+                padding: '5px 6px',
+                boxShadow: '0 8px 24px rgba(16, 47, 86, 0.25)',
+                maxWidth: '560px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ padding: '0 10px', color: '#64748B', display: 'flex', alignItems: 'center' }}>
+                  <Search size={20} />
+                </div>
+                <input
+                  type="text"
+                  value={heroSearch}
+                  onChange={(e) => setHeroSearch(e.target.value)}
+                  placeholder={isKannada ? 'ಯೋಜನೆ ಅಥವಾ ಸೇವೆಯನ್ನು ಹುಡುಕಿ (ಉದಾ: ರೈತ ಸಿರಿ, ಜಾತಿ ಪ್ರಮಾಣಪತ್ರ)...' : 'Search schemes, services or certificates (e.g. Raitha Siri, Caste Certificate)...'}
+                  style={{
+                    flex: 1,
+                    border: 'none',
+                    outline: 'none',
+                    fontSize: '0.95rem',
+                    color: '#172B45',
+                    padding: '8px 4px',
+                    fontFamily: 'inherit'
+                  }}
+                  aria-label="Search schemes and services"
+                />
+                <button
+                  type="submit"
+                  style={{
+                    backgroundColor: '#1556A0',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '10px 18px',
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'background-color 0.15s ease'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#102F56'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1556A0'}
+                >
+                  <span>{isKannada ? 'ಹುಡುಕಿ' : 'Search'}</span>
+                  <ArrowRight size={15} />
+                </button>
+              </form>
+
+              {/* CTA Button Group */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                <Link
+                  to="/services"
+                  style={{
+                    backgroundColor: '#D99016',
+                    color: '#102F56',
+                    padding: '11px 22px',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    fontSize: '0.92rem',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 14px rgba(217, 144, 22, 0.4)',
+                    transition: 'transform 0.15s ease'
+                  }}
+                >
+                  <Layers size={18} />
+                  <span>{isKannada ? '೧,೦೬೦+ ಸೇವೆಗಳನ್ನು ವೀಕ್ಷಿಸಿ' : 'Explore All 1,060+ Schemes'}</span>
+                  <ArrowRight size={16} />
+                </Link>
+
+                <Link
+                  to="/finder"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                    color: '#FFFFFF',
+                    border: '1px solid rgba(255, 255, 255, 0.35)',
+                    padding: '11px 20px',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    fontSize: '0.92rem',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    backdropFilter: 'blur(6px)',
+                    transition: 'background-color 0.15s ease'
+                  }}
+                >
+                  <Sparkles size={17} color="#FEF08A" />
+                  <span>{isKannada ? 'ನನಗಾಗಿ ಯೋಜನೆ ಹುಡುಕಿ' : 'Find Schemes for Me'}</span>
+                </Link>
+
+                <Link
+                  to="/eligibility"
+                  style={{
+                    color: '#E0F2FE',
+                    textDecoration: 'none',
+                    fontSize: '0.88rem',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '8px 12px'
+                  }}
+                >
+                  <span>{isKannada ? 'ಕುಟುಂಬ ಅರ್ಹತೆ ಪರಿಶೀಲಿಸಿ' : 'Check Kutumba Rules →'}</span>
+                </Link>
+              </div>
             </div>
-          </div>
 
-          {/* Slider Pagination Dots */}
-          <div className="slider-dots" role="tablist">
-            {slides.map((_, idx) => (
-              <button
-                key={idx}
-                type="button"
-                className={`slider-dot ${idx === currentSlide ? 'active' : ''}`}
-                onClick={() => setCurrentSlide(idx)}
-                aria-label={`Go to slide ${idx + 1}`}
-              />
-            ))}
+            {/* Right Column: Live Offline/Online DPI Assurance Card */}
+            <div style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '16px',
+              padding: '24px',
+              color: '#172B45',
+              boxShadow: '0 16px 36px rgba(16, 47, 86, 0.25)',
+              border: '1px solid rgba(255, 255, 255, 0.8)',
+              maxWidth: '460px',
+              marginLeft: 'auto'
+            }}>
+              {/* Real-time Network Pill */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingBottom: '14px',
+                borderBottom: '1px solid #E2E8F0',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    backgroundColor: online ? '#16834A' : '#D99016',
+                    boxShadow: online ? '0 0 0 3px rgba(22, 131, 74, 0.2)' : '0 0 0 3px rgba(217, 144, 22, 0.2)'
+                  }} />
+                  <span style={{ fontSize: '0.86rem', fontWeight: 700, color: online ? '#16834A' : '#D99016' }}>
+                    {online
+                      ? (isKannada ? 'ಆನ್‌ಲೈನ್ — ನೇರ ಡಿಜಿಟಲ್ ಸಂಪರ್ಕ' : 'Online — Direct Central API')
+                      : (isKannada ? 'ಆಫ್‌ಲೈನ್ — ಸ್ಥಳೀಯ ಡ್ರಾಫ್ಟ್ ಮೋಡ್' : 'Offline — Local IndexedDB Engine')}
+                  </span>
+                </div>
+                <span style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  color: '#64748B',
+                  backgroundColor: '#F1F5F9',
+                  padding: '3px 8px',
+                  borderRadius: '6px'
+                }}>
+                  PWA Ready
+                </span>
+              </div>
+
+              {/* Live Metric Counters */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '12px',
+                marginBottom: '18px'
+              }}>
+                <div style={{ backgroundColor: '#F8FAFC', padding: '12px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#102F56', lineHeight: 1.1 }}>
+                    {stats.totalRecords ? stats.totalRecords.toLocaleString() : '1,060'}
+                  </div>
+                  <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#64748B', marginTop: '4px' }}>
+                    {isKannada ? 'ಒಟ್ಟು ಯೋಜನೆ ಮತ್ತು ಸೇವೆಗಳು' : 'Total Verified Schemes'}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#F0FDF4', padding: '12px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
+                  <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#16834A', lineHeight: 1.1 }}>
+                    100%
+                  </div>
+                  <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#16834A', marginTop: '4px' }}>
+                    {isKannada ? 'ಸ್ಥಳೀಯ ಡ್ರಾಫ್ಟ್ ರಕ್ಷಣೆ' : 'Offline Draft Preservation'}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#EFF6FF', padding: '12px', borderRadius: '10px', border: '1px solid #BFDBFE' }}>
+                  <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#1556A0', lineHeight: 1.1 }}>
+                    31
+                  </div>
+                  <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#1556A0', marginTop: '4px' }}>
+                    {isKannada ? 'ಕರ್ನಾಟಕ ಜಿಲ್ಲೆಗಳು' : 'Karnataka Districts Covered'}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#FEFCE8', padding: '12px', borderRadius: '10px', border: '1px solid #FEF08A' }}>
+                  <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#D99016', lineHeight: 1.1 }}>
+                    15 {isKannada ? 'ದಿನಗಳು' : 'Days'}
+                  </div>
+                  <div style={{ fontSize: '0.76rem', fontWeight: 600, color: '#92400E', marginTop: '4px' }}>
+                    {isKannada ? 'ಸಕಾಲ ಗರಿಷ್ಠ ಗಡುವು' : 'Avg. Sakala SLA Delivery'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Service Types Breakdown Badges */}
+              <div style={{
+                backgroundColor: '#F8FAFC',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                fontSize: '0.78rem',
+                color: '#475569',
+                display: 'flex',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+                marginBottom: '16px'
+              }}>
+                <span><strong>{stats.byServiceType?.scheme || 350}</strong> {isKannada ? 'ಯೋಜನೆಗಳು' : 'Schemes'}</span>
+                <span>•</span>
+                <span><strong>{stats.byServiceType?.service || 667}</strong> {isKannada ? 'ಸೇವೆಗಳು' : 'Services'}</span>
+                <span>•</span>
+                <span><strong>{stats.byServiceType?.certificate || 36}</strong> {isKannada ? 'ಪ್ರಮಾಣಪತ್ರ' : 'Certs'}</span>
+                <span>•</span>
+                <span><strong>{stats.byServiceType?.welfare_benefit || 7}</strong> {isKannada ? 'ಮಾಸಾಶನ' : 'Benefits'}</span>
+              </div>
+
+              {/* Quick Action Button to Track or View Drafts */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Link
+                  to="/tracking"
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    backgroundColor: '#102F56',
+                    color: '#FFFFFF',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    fontSize: '0.84rem',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <FileCheck size={15} />
+                  <span>{isKannada ? 'ನನ್ನ ಅರ್ಜಿಗಳು / ಡ್ರಾಫ್ಟ್‌ಗಳು' : 'My Drafts & Tracking'}</span>
+                </Link>
+
+                <Link
+                  to="/grievance"
+                  style={{
+                    textAlign: 'center',
+                    backgroundColor: '#F1F5F9',
+                    color: '#172B45',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    border: '1px solid #CBD5E1'
+                  }}
+                  title="Janaspandana Grievance Desk"
+                >
+                  {isKannada ? 'ಜನಸ್ಪಂದನ' : 'Grievance'}
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 2. MARQUEE ANNOUNCEMENTS TICKER */}
-      <div className="gov-ticker-bar" role="region" aria-label="Official Announcements">
-        <div className="ticker-label">
-          <AlertTriangle size={15} />
-          <span>{isKannada ? 'ಸೂಚನೆಗಳು' : 'Announcements'}</span>
-        </div>
-        <div className="ticker-marquee-wrap">
-          <span className="ticker-marquee-text">
-            📢 <strong>OfflineBridge:</strong> {isKannada
-              ? 'ರೈತ ಸಿರಿ, ಸಂಧ್ಯಾ ಸುರಕ್ಷಾ, ಗೃಹಲಕ್ಷ್ಮಿ, ಯುವ ನಿಧಿ ಮತ್ತು ಪಡಿತರ ಚೀಟಿ ಸೇವೆಗಳನ್ನು ಅಂತರ್ಜಾಲವಿಲ್ಲದೆಯೂ ಭರ್ತಿ ಮಾಡಿ ಸುರಕ್ಷಿತವಾಗಿ ಸೇವ್ ಮಾಡಬಹುದು. ಸಂಪರ್ಕ ದೊರೆತಾಗ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನವೀಕರಣಗೊಳ್ಳುತ್ತದೆ.'
-              : 'Citizen service applications, seed subsidies, and grievance submissions can now be filled 100% offline. Stored data auto-syncs securely once internet connectivity resumes.'} | 🌾 {isKannada ? 'ಕುಟುಂಬ ಅರ್ಹತಾ ನಿಯಮಗಳನ್ನು ಕಚೇರಿಗೆ ತೆರಳದೆ ಪರಿಶೀಲಿಸಿ.' : 'Check scheme eligibility under Kutumba rules without visiting government offices.'}
-          </span>
+      {/* 2. OFFICIAL ANNOUNCEMENTS TICKER */}
+      <div style={{
+        backgroundColor: '#FFFFFF',
+        borderBottom: '1px solid #E2E8F0',
+        padding: '8px 16px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+      }}>
+        <div style={{
+          maxWidth: '1280px',
+          margin: '0 auto',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: '#DCFCE7',
+            color: '#16834A',
+            padding: '3px 10px',
+            borderRadius: '4px',
+            fontSize: '0.76rem',
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            flexShrink: 0
+          }}>
+            <CheckCircle2 size={13} />
+            <span>{isKannada ? 'ಅಧಿಕೃತ ಸೂಚನೆ' : 'Live Ticker'}</span>
+          </div>
+
+          <div style={{
+            fontSize: '0.84rem',
+            color: '#475569',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}>
+            {isKannada
+              ? '📢 ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್: ರೈತ ಸಿರಿ, ಸಂಧ್ಯಾ ಸುರಕ್ಷಾ, ಗೃಹಲಕ್ಷ್ಮಿ ಮತ್ತು ಜಾತಿ ಪ್ರಮಾಣಪತ್ರ ಅರ್ಜಿಗಳನ್ನು ಅಂತರ್ಜಾಲವಿಲ್ಲದೆಯೂ ಸಂಪೂರ್ಣವಾಗಿ ಭರ್ತಿ ಮಾಡಬಹುದು. ಸಂಪರ್ಕ ಮರುಸ್ಥಾಪನೆಗೊಂಡಾಗ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಸರ್ವರ್‌ಗೆ ಸಲ್ಲಿಸಲಾಗುತ್ತದೆ.'
+              : '📢 OfflineBridge: Applications for Raitha Siri, Sandhya Suraksha, Gruha Lakshmi, and Statutory Caste/Income Certificates can be completed 100% offline. Local drafts auto-sync securely once connection is restored.'}
+          </div>
+
+          <Link
+            to="/services"
+            style={{
+              marginLeft: 'auto',
+              flexShrink: 0,
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              color: '#1556A0',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <span>{isKannada ? 'ಎಲ್ಲವನ್ನೂ ವೀಕ್ಷಿಸಿ' : 'View All'}</span>
+            <ChevronRight size={14} />
+          </Link>
         </div>
       </div>
 
-      {/* 2B. PROMINENT CITIZEN FEATURE: FIND SCHEMES FOR ME */}
-      <div style={{
-        maxWidth: '1360px',
-        margin: '16px auto 0 auto',
-        padding: '0 16px'
-      }}>
+      {/* 3. 8-SECTOR DIGITAL PUBLIC INFRASTRUCTURE CATEGORIES */}
+      <section style={{ maxWidth: '1280px', margin: '32px auto 0', padding: '0 16px' }}>
         <div style={{
-          backgroundColor: '#ffffff',
-          border: '1px solid #bfdbfe',
-          borderLeft: '5px solid var(--gov-blue-primary, #0284c7)',
-          borderRadius: '8px',
-          padding: '16px 20px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div>
+            <div style={{
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              color: '#1556A0',
+              letterSpacing: '0.06em',
+              marginBottom: '4px'
+            }}>
+              {isKannada ? 'ವಲಯವಾರು ಸೇವೆಗಳು' : 'Sector Taxonomy'}
+            </div>
+            <h2 style={{
+              fontSize: '1.5rem',
+              fontWeight: 800,
+              color: '#102F56',
+              margin: 0,
+              letterSpacing: '-0.01em'
+            }}>
+              {isKannada ? '೮ ಪ್ರಮುಖ ಸಾರ್ವಜನಿಕ ಸೇವಾ ವಲಯಗಳು' : '8 Core Citizen Service Sectors'}
+            </h2>
+          </div>
+
+          <Link
+            to="/services"
+            style={{
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              color: '#1556A0',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>{isKannada ? '೧,೦೬೦+ ಎಲ್ಲಾ ಸೇವೆಗಳನ್ನು ಹುಡುಕಿ' : 'Browse All 1,060+ Items'}</span>
+            <ArrowRight size={15} />
+          </Link>
+        </div>
+
+        {/* Responsive Sector Grid (3 cols desktop, 2 cols tablet, 1 col mobile) */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: '16px'
+        }}>
+          {sectorCategories.map((sector) => {
+            const IconComponent = sector.icon;
+
+            return (
+              <Link
+                key={sector.id}
+                to={`/services?category=${sector.id}`}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 2px 8px rgba(16, 47, 86, 0.04)',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  position: 'relative'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-3px)';
+                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 47, 86, 0.08)';
+                  e.currentTarget.style.borderColor = sector.color;
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 47, 86, 0.04)';
+                  e.currentTarget.style.borderColor = '#E2E8F0';
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '10px',
+                    backgroundColor: sector.bgColor,
+                    color: sector.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <IconComponent size={24} />
+                  </div>
+
+                  <span style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    color: sector.color,
+                    backgroundColor: sector.bgColor,
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    border: `1px solid ${sector.bgColor}`
+                  }}>
+                    {sector.badge}
+                  </span>
+                </div>
+
+                <h3 style={{
+                  fontSize: '1.08rem',
+                  fontWeight: 700,
+                  color: '#102F56',
+                  margin: '0 0 6px 0',
+                  lineHeight: 1.3
+                }}>
+                  {t(sector.title, sector.titleKn)}
+                </h3>
+
+                <p style={{
+                  fontSize: '0.84rem',
+                  color: '#64748B',
+                  lineHeight: 1.5,
+                  margin: '0 0 16px 0',
+                  flex: 1
+                }}>
+                  {t(sector.desc, sector.descKn)}
+                </p>
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingTop: '12px',
+                  borderTop: '1px solid #F1F5F9',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  color: '#1556A0'
+                }}>
+                  <span>{sector.count} {isKannada ? 'ಸೇವೆಗಳು' : 'Services'}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                    {isKannada ? 'ತೆರೆಯಿರಿ' : 'Open'} <ArrowRight size={14} />
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 4. FEATURED SCHEMES & DIRECT APPLICATION DRAFTING */}
+      <section style={{ maxWidth: '1280px', margin: '40px auto 0', padding: '0 16px' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div>
+            <div style={{
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              color: '#1556A0',
+              letterSpacing: '0.06em',
+              marginBottom: '4px'
+            }}>
+              {isKannada ? 'ಪ್ರಮುಖ ಕಲ್ಯಾಣ ಯೋಜನೆಗಳು' : 'High Priority Citizen Schemes'}
+            </div>
+            <h2 style={{
+              fontSize: '1.5rem',
+              fontWeight: 800,
+              color: '#102F56',
+              margin: 0,
+              letterSpacing: '-0.01em'
+            }}>
+              {isKannada ? 'ಅಧಿಕೃತ ಯೋಜನೆಗಳು ಮತ್ತು ಆಫ್‌ಲೈನ್ ಅರ್ಜಿಗಳು' : 'Featured Schemes & Instant Offline Drafting'}
+            </h2>
+          </div>
+
+          <Link
+            to="/services"
+            style={{
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              color: '#1556A0',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>{isKannada ? 'ಎಲ್ಲಾ ಯೋಜನೆಗಳ ಪಟ್ಟಿ' : 'View Full Catalogue'}</span>
+            <ArrowRight size={15} />
+          </Link>
+        </div>
+
+        {/* 3-Column Grid for Featured Schemes */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
+          gap: '20px'
+        }}>
+          {featuredSchemes.map((scheme) => {
+            const hasDraft = savedDraftIds.has(scheme.id);
+
+            return (
+              <div
+                key={scheme.id}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '14px',
+                  border: '1px solid #E2E8F0',
+                  padding: '22px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: '0 2px 8px rgba(16, 47, 86, 0.04)',
+                  transition: 'box-shadow 0.2s ease, border-color 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 47, 86, 0.08)';
+                  e.currentTarget.style.borderColor = '#BFDBFE';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 47, 86, 0.04)';
+                  e.currentTarget.style.borderColor = '#E2E8F0';
+                }}
+              >
+                {/* Header: Service Code + SLA + Draft indicator */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <span style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      backgroundColor: '#EFF6FF',
+                      color: '#1556A0',
+                      padding: '3px 7px',
+                      borderRadius: '4px',
+                      letterSpacing: '0.04em'
+                    }}>
+                      {scheme.serviceCode}
+                    </span>
+                    <span style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      backgroundColor: '#FEFCE8',
+                      color: '#92400E',
+                      padding: '3px 7px',
+                      borderRadius: '4px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <Clock size={11} /> SLA: {scheme.slaDays} {isKannada ? 'ದಿನಗಳು' : 'Days'}
+                    </span>
+                  </div>
+
+                  {hasDraft && (
+                    <span style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      backgroundColor: '#DCFCE7',
+                      color: '#16834A',
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <FileCheck size={12} /> {isKannada ? 'ಡ್ರಾಫ್ಟ್ ಇದೆ' : 'Draft Saved'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Scheme Title */}
+                <h3 style={{
+                  fontSize: '1.12rem',
+                  fontWeight: 800,
+                  color: '#102F56',
+                  lineHeight: 1.35,
+                  margin: '0 0 6px 0'
+                }}>
+                  {t(scheme.title, scheme.titleKn)}
+                </h3>
+
+                {/* Department */}
+                <div style={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: '#64748B',
+                  marginBottom: '12px'
+                }}>
+                  {t(scheme.department, scheme.departmentKn)}
+                </div>
+
+                {/* Benefit Summary Box */}
+                <div style={{
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  marginBottom: '14px',
+                  fontSize: '0.84rem',
+                  lineHeight: 1.45,
+                  color: '#334155',
+                  borderLeft: '3px solid #1556A0'
+                }}>
+                  <strong style={{ color: '#102F56' }}>{isKannada ? 'ಪ್ರಯೋಜನ:' : 'Benefit:'}</strong>{' '}
+                  {t(scheme.benefitSummary, scheme.benefitSummaryKn)}
+                </div>
+
+                {/* Action Buttons: Modal Draft + Details */}
+                <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const full = getCatalogueSchemeById(scheme.id);
+                      if (full) {
+                        setActiveModalScheme(full);
+                      } else {
+                        navigate(`/services?search=${encodeURIComponent(scheme.title)}`);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: hasDraft ? '#16834A' : '#1556A0',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      fontSize: '0.86rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 6px rgba(16, 47, 86, 0.12)'
+                    }}
+                  >
+                    <FileText size={15} />
+                    <span>
+                      {hasDraft
+                        ? (isKannada ? 'ಡ್ರಾಫ್ಟ್ ಮುಂದುವರಿಸಿ' : 'Resume Saved Draft')
+                        : (isKannada ? 'ಆಫ್‌ಲೈನ್ ಅರ್ಜಿ ಭರ್ತಿ ಮಾಡಿ' : 'Open Application Draft')}
+                    </span>
+                  </button>
+
+                  <Link
+                    to={`/services?search=${encodeURIComponent(scheme.title)}`}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      color: '#102F56',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      fontSize: '0.84rem',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    title="View Full Scheme Details"
+                  >
+                    {isKannada ? 'ವಿವರ' : 'Details'}
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 5. INTERACTIVE OFFLINE-FIRST ARCHITECTURE STRIP */}
+      <section style={{ maxWidth: '1280px', margin: '44px auto 0', padding: '0 16px' }}>
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #E2E8F0',
+          padding: '32px 28px',
+          boxShadow: '0 4px 16px rgba(16, 47, 86, 0.05)'
+        }}>
+          <div style={{ textAlign: 'center', maxWidth: '700px', margin: '0 auto 28px' }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              backgroundColor: '#EFF6FF',
+              color: '#1556A0',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              marginBottom: '10px'
+            }}>
+              <ShieldCheck size={15} />
+              <span>{isKannada ? 'ಗ್ರಾಮೀಣ ಕನೆಕ್ಟಿವಿಟಿ ತಂತ್ರಜ್ಞಾನ' : 'Zero-Dropout Architecture'}</span>
+            </div>
+            <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#102F56', margin: '0 0 8px 0' }}>
+              {isKannada ? 'ಇಂಟರ್ನೆಟ್ ಇಲ್ಲದಿದ್ದರೂ ನಿಮ್ಮ ಅರ್ಜಿ ಹೇಗೆ ಸುರಕ್ಷಿತವಾಗಿರುತ್ತದೆ?' : 'How OfflineBridge Works Without Active Internet'}
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: '#64748B', lineHeight: 1.5, margin: 0 }}>
+              {isKannada
+                ? 'ಗ್ರಾಮೀಣ ನೆಟ್‌ವರ್ಕ್ ಕಡಿತಗೊಂಡಾಗ ಅರ್ಜಿ ರದ್ದಾಗದಂತೆ ಸ್ಥಳೀಯ ಬ್ರೌಸರ್ ಡ್ರಾಫ್ಟ್ ಎಂಜಿನ್ ಮತ್ತು ಹಿನ್ನೆಲೆ ಸಿಂಕ್ ತಂತ್ರಜ್ಞಾನ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ.'
+                : 'Built with modern PWA Service Workers and client-side IndexedDB preservation to protect rural citizens from connectivity drops.'}
+            </p>
+          </div>
+
+          {/* 3-Step Architecture Grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '24px'
+          }}>
+            {/* Step 1 */}
+            <div style={{
+              backgroundColor: '#F8FAFC',
+              borderRadius: '12px',
+              padding: '20px',
+              border: '1px solid #E2E8F0',
+              position: 'relative'
+            }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: '#1556A0',
+                color: '#FFFFFF',
+                fontSize: '0.9rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '14px'
+              }}>
+                1
+              </div>
+              <h3 style={{ fontSize: '1.02rem', fontWeight: 800, color: '#102F56', marginBottom: '8px' }}>
+                {isKannada ? '೧. ಸಂಪೂರ್ಣ ಆಫ್‌ಲೈನ್ ಬ್ರೌಸಿಂಗ್' : '1. Cache-First PWA Loading'}
+              </h3>
+              <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: 0 }}>
+                {isKannada
+                  ? '೧,೦೬೦+ ಯೋಜನೆಗಳ ನಿಯಮಗಳು, ದಾಖಲೆಗಳ ಪಟ್ಟಿ ಮತ್ತು ನಮೂನೆಗಳು ಬ್ರೌಸರ್ ಸಂಗ್ರಹದಲ್ಲಿದ್ದು ತಕ್ಷಣ ತೆರೆಯುತ್ತವೆ.'
+                  : 'Schemes catalogue, eligibility matrices, and application schemas are stored on-device via Service Worker for instant offline access.'}
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div style={{
+              backgroundColor: '#F8FAFC',
+              borderRadius: '12px',
+              padding: '20px',
+              border: '1px solid #E2E8F0',
+              position: 'relative'
+            }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: '#16834A',
+                color: '#FFFFFF',
+                fontSize: '0.9rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '14px'
+              }}>
+                2
+              </div>
+              <h3 style={{ fontSize: '1.02rem', fontWeight: 800, color: '#102F56', marginBottom: '8px' }}>
+                {isKannada ? '೨. ತತ್‌ಕ್ಷಣದ IndexedDB ಡ್ರಾಫ್ಟ್' : '2. Real-Time Keystroke Drafts'}
+              </h3>
+              <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: 0 }}>
+                {isKannada
+                  ? 'ನೀವು ನಮೂದಿಸುವ ಪ್ರತಿಯೊಂದು ಅಕ್ಷರವೂ ಬ್ರೌಸರ್‌ನ IndexedDB ಯಲ್ಲಿ ಸೇವ್ ಆಗುತ್ತದೆ. ಬ್ಯಾಟರಿ ಅಥವಾ ಸಿಗ್ನಲ್ ಕಡಿತಗೊಂಡರೂ ಮಾಹಿತಿ ಕಳೆದುಹೋಗುವುದಿಲ್ಲ.'
+                  : 'Every keystroke is auto-saved locally into browser IndexedDB. Closing the tab or losing power retains 100% of the applicant details.'}
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div style={{
+              backgroundColor: '#F8FAFC',
+              borderRadius: '12px',
+              padding: '20px',
+              border: '1px solid #E2E8F0',
+              position: 'relative'
+            }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: '#D99016',
+                color: '#FFFFFF',
+                fontSize: '0.9rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '14px'
+              }}>
+                3
+              </div>
+              <h3 style={{ fontSize: '1.02rem', fontWeight: 800, color: '#102F56', marginBottom: '8px' }}>
+                {isKannada ? '೩. ಸುರಕ್ಷಿತ ಸ್ವಯಂಚಾಲಿತ ಸಿಂಕ್' : '3. Guaranteed Zero-Loss Sync'}
+              </h3>
+              <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, margin: 0 }}>
+                {isKannada
+                  ? 'ಮೊಬೈಲ್ ನೆಟ್‌ವರ್ಕ್ ದೊರೆತ ಕೂಡಲೇ ಡ್ರಾಫ್ಟ್‌ಗಳು ಹಿನ್ನೆಲೆಯಲ್ಲಿ ಸರ್ವರ್‌ಗೆ ರವಾನೆಯಾಗಿ ಅಧಿಕೃತ Sakala GSC ಅರ್ಜಿ ಸಂಖ್ಯೆ ಪಡೆಯುತ್ತವೆ.'
+                  : 'As soon as 2G/3G/4G connectivity resumes, background sync transmits drafts to PostgreSQL and mints official Sakala tracking numbers.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. OFFICIAL KARNATAKA GOVERNMENT ECOSYSTEM PORTALS */}
+      <section style={{ maxWidth: '1280px', margin: '40px auto 0', padding: '0 16px' }}>
+        <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          marginBottom: '18px',
           flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div>
+            <div style={{
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              color: '#1556A0',
+              letterSpacing: '0.06em',
+              marginBottom: '4px'
+            }}>
+              {isKannada ? 'ಅಧಿಕೃತ ಪೋರ್ಟಲ್‌ಗಳ ಸಂಪರ್ಕ' : 'State & Central DPI Hub'}
+            </div>
+            <h2 style={{
+              fontSize: '1.45rem',
+              fontWeight: 800,
+              color: '#102F56',
+              margin: 0
+            }}>
+              {isKannada ? 'ಕರ್ನಾಟಕ ಸರ್ಕಾರದ ಪ್ರಮುಖ ಡಿಜಿಟಲ್ ಪೋರ್ಟಲ್‌ಗಳು' : 'Karnataka Official Digital Portals'}
+            </h2>
+          </div>
+          <span style={{ fontSize: '0.82rem', color: '#64748B' }}>
+            {isKannada ? 'ನೇರ ಅಧಿಕೃತ ಲಿಂಕ್‌ಗಳು' : 'Verified Authoritative Sources'}
+          </span>
+        </div>
+
+        {/* 4-Column Grid for Official Portals */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
           gap: '14px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              backgroundColor: '#eff6ff',
-              color: 'var(--gov-blue-primary, #0284c7)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              <Sparkles size={22} color="#f59e0b" />
-            </div>
-            <div>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--gov-blue-dark, #0f172a)', margin: 0 }}>
-                {isKannada ? 'ನನಗಾಗಿ ಯೋಜನೆಗಳನ್ನು ಹುಡುಕಿ (Find Schemes for Me)' : 'Find Schemes for Me'}
-              </h2>
-              <p style={{ margin: '3px 0 0 0', fontSize: '0.86rem', color: '#475569' }}>
-                {isKannada
-                  ? 'ನಿಮ್ಮ ಪರಿಸ್ಥಿತಿಯ ಬಗ್ಗೆ ನಮಗೆ ತಿಳಿಸಿ. ನಿಮ್ಮ ಅಗತ್ಯಗಳಿಗೆ ಸರಿಹೊಂದುವ ಸೇವೆಗಳು ಮತ್ತು ಯೋಜನೆಗಳನ್ನು ಆಫ್‌ಲೈನ್‌ಬ್ರಿಡ್ಜ್ ನಿಮಗೆ ತೋರಿಸುತ್ತದೆ.'
-                  : 'Tell us a little about your situation. OfflineBridge will help you discover services and schemes that may fit your needs.'}
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <Link
-              to="/finder"
+          {officialPortals.map((portal) => (
+            <a
+              key={portal.name}
+              href={portal.url}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 18px',
-                backgroundColor: 'var(--gov-blue-primary, #0284c7)',
-                color: '#ffffff',
-                borderRadius: '6px',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '10px',
+                border: '1px solid #E2E8F0',
+                padding: '16px',
                 textDecoration: 'none',
-                fontSize: '0.88rem',
-                fontWeight: 700,
-                boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)'
+                color: 'inherit',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 1px 3px rgba(16, 47, 86, 0.04)',
+                transition: 'border-color 0.15s ease, transform 0.15s ease'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.borderColor = '#1556A0';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.borderColor = '#E2E8F0';
+                e.currentTarget.style.transform = 'none';
               }}
             >
-              <span>{isKannada ? 'ಪ್ರಶ್ನಾವಳಿ ಪ್ರಾರಂಭಿಸಿ' : 'Start Discovery Questionnaire'}</span>
-              <ArrowRight size={16} />
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. 3-COLUMN PORTAL BODY GRID */}
-      <div className="portal-main-container">
-        <div className="portal-grid-3col">
-          {/* Left Column: Citizen Categories Sidebar (NOW FULLY FUNCTIONAL) */}
-          <aside className="citizen-category-sidebar" aria-label="Citizen Categories">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '0.9rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--gov-blue-dark)', letterSpacing: '0.04em' }}>
-                {isKannada ? 'ನಾಗರಿಕ ವರ್ಗಗಳು' : 'Citizen Categories'}
-              </h3>
-              {selectedCategory !== 'all' && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategory('all')}
-                  style={{
-                    fontSize: '0.72rem',
-                    color: '#0284c7',
-                    fontWeight: 700,
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textDecoration: 'underline'
-                  }}
-                >
-                  {isKannada ? 'ಎಲ್ಲವನ್ನೂ ತೋರಿಸು' : 'Show All'}
-                </button>
-              )}
-            </div>
-
-            {categories.map((cat) => {
-              const IconComp = cat.icon;
-              const isSelected = selectedCategory === cat.id;
-
-              return (
-                <div
-                  key={cat.id}
-                  className={`category-bubble-card ${isSelected ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={isSelected}
-                  onKeyDown={(e) => { if (e.key === 'Enter') setSelectedCategory(cat.id); }}
-                >
-                  <div className="category-left-wrap">
-                    <div className="category-icon-bubble">
-                      <IconComp size={22} />
-                    </div>
-                    <div className="category-title-group">
-                      <h4>{cat.title}</h4>
-                      <span>{cat.sub}</span>
-                    </div>
-                  </div>
-                  <ChevronDown
-                    size={18}
-                    className="category-arrow-icon"
-                    style={{ transform: isSelected ? 'rotate(-90deg)' : 'rotate(0deg)' }}
-                  />
-                </div>
-              );
-            })}
-          </aside>
-
-          {/* Center Column: Filtered Schemes or Core Sector Cards */}
-          <main className="portal-center-content">
-            {/* Section Header with Filter State */}
-            <div className="section-title-bar">
-              <div>
-                <h2>
-                  <BookOpen size={20} color="var(--gov-blue-primary)" />
-                  <span>
-                    {selectedCategory === 'all'
-                      ? (isKannada ? 'ಪ್ರಮುಖ ಗ್ರಾಮೀಣ ವಲಯಗಳು ಮತ್ತು ಸೇವೆಗಳು' : 'Key Rural Sectors & Digital Services')
-                      : `${activeCategoryObj?.title || 'Selected Category'}`}
-                  </span>
-                </h2>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  {selectedCategory === 'all'
-                    ? (isKannada ? 'ಎಲ್ಲಾ 6 ಪ್ರಮುಖ ವಲಯಗಳು (ಆಫ್‌ಲೈನ್ ಸಕ್ರಿಯ)' : 'Showing all 6 core services (Offline-Ready)')
-                    : `${filteredSchemes.length} ${filteredSchemes.length === 1 ? 'verified service' : 'verified services'} available`}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 800,
+                  backgroundColor: '#EFF6FF',
+                  color: '#1556A0',
+                  padding: '2px 8px',
+                  borderRadius: '4px'
+                }}>
+                  {portal.tag}
                 </span>
+                <ExternalLink size={14} color="#94A3B8" />
               </div>
 
-              {selectedCategory !== 'all' && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => setSelectedCategory('all')}
-                  style={{ fontSize: '0.78rem', padding: '4px 10px', minHeight: '32px' }}
-                >
-                  <XCircle size={14} />
-                  <span>{isKannada ? 'ಎಲ್ಲಾ ವಲಯಗಳನ್ನು ತೋರಿಸು' : 'Clear Filter (Show All)'}</span>
-                </button>
-              )}
-            </div>
+              <h4 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#102F56', margin: '0 0 4px 0' }}>
+                {t(portal.name, portal.nameKn)}
+              </h4>
 
-            {/* Active Filter Notification Pill */}
-            {selectedCategory !== 'all' && (
-              <div style={{
-                backgroundColor: '#eff6ff',
-                border: '1px solid #bfdbfe',
-                padding: '8px 12px',
-                borderRadius: '4px',
-                marginBottom: '14px',
-                fontSize: '0.82rem',
-                color: '#1e40af',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '8px'
-              }}>
-                <span>
-                  Filtering by: <strong>{activeCategoryObj?.title}</strong>. Selecting another category in the left sidebar updates results immediately.
-                </span>
-                <Link to={`/services?category=${selectedCategory}`} style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0284c7', textDecoration: 'none' }}>
-                  View in Full Catalogue →
-                </Link>
-              </div>
-            )}
-
-            {/* VIEW A: CATEGORY FILTERED SCHEME CARDS */}
-            {selectedCategory !== 'all' ? (
-              filteredSchemes.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                  {filteredSchemes.map((scheme) => {
-                    const hasDraft = savedDraftIds.has(scheme.id);
-
-                    return (
-                      <div key={scheme.id} className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '6px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--gov-blue-primary)', textTransform: 'uppercase' }}>
-                            {t(scheme.department, scheme.departmentKn)}
-                          </span>
-                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                            {hasDraft && (
-                              <span className="draft-saved-pill">
-                                <FileCheck size={11} />
-                                <span>{isKannada ? 'ಡ್ರಾಫ್ಟ್ ಸೇವ್ ಆಗಿದೆ' : 'Draft Saved'}</span>
-                              </span>
-                            )}
-                            <span className="feature-pill" style={{ color: 'var(--gov-green)', backgroundColor: 'var(--gov-green-light)' }}>
-                              <WifiOff size={11} /> {isKannada ? 'ಆಫ್‌ಲೈನ್ ರೆಡಿ' : 'Offline Form'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--gov-blue-dark)', marginBottom: '6px' }}>
-                          {t(scheme.title, scheme.titleKn)}
-                        </h3>
-
-                        <p style={{ color: 'var(--text-subtle)', fontSize: '0.85rem', lineHeight: '1.45', marginBottom: '12px', flex: 1 }}>
-                          {t(scheme.shortDesc, scheme.shortDescKn)}
-                        </p>
-
-                        <div style={{
-                          backgroundColor: 'var(--bg-body)',
-                          padding: '8px 10px',
-                          borderRadius: '4px',
-                          fontSize: '0.78rem',
-                          color: 'var(--text-muted)',
-                          marginBottom: '14px'
-                        }}>
-                          <strong>{isKannada ? 'ಅರ್ಹತೆ:' : 'Eligibility:'}</strong> {scheme.eligibilityCriteria[0]}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => setActiveModalScheme(scheme)}
-                            style={{ flex: 1, fontSize: '0.82rem', padding: '8px 10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                          >
-                            <FileText size={15} />
-                            <span>{hasDraft ? (isKannada ? 'ಡ್ರಾಫ್ಟ್ ಮುಂದುವರಿಸಿ' : 'Resume Saved Draft') : (isKannada ? 'ಆಫ್‌ಲೈನ್ ಅರ್ಜಿ ತೆರೆಯಿರಿ' : 'Open Application Draft')}</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* Helpful Empty State */
-                <div className="card" style={{ textAlign: 'center', padding: '36px 20px', marginBottom: '16px' }}>
-                  <XCircle size={36} color="var(--text-muted)" style={{ margin: '0 auto 12px' }} />
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '6px' }}>
-                    No schemes found in this category
-                  </h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', maxWidth: '440px', margin: '0 auto 16px' }}>
-                    There are currently no offline-ready schemes under this category in the local catalogue.
-                  </p>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setSelectedCategory('all')}
-                    style={{ fontSize: '0.85rem', padding: '8px 16px' }}
-                  >
-                    View All Categories
-                  </button>
-                </div>
-              )
-            ) : (
-              /* VIEW B: ALL CATEGORIES (PRESERVES EXACT 6 SECTOR CARDS) */
-              <div className="sector-cards-grid">
-                {sectorCards.map((card) => {
-                  const hasDraft = card.schemeId && savedDraftIds.has(card.schemeId);
-
-                  return (
-                    <div
-                      key={card.id}
-                      className="sector-photo-card"
-                      onClick={() => {
-                        if (card.schemeId) {
-                          const fullScheme = getCatalogueSchemeById(card.schemeId);
-                          if (fullScheme) {
-                            setActiveModalScheme(fullScheme);
-                            return;
-                          }
-                        }
-                        navigate(card.link);
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Open ${card.title}`}
-                      style={{ cursor: 'pointer' }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          if (card.schemeId) {
-                            const fullScheme = getCatalogueSchemeById(card.schemeId);
-                            if (fullScheme) {
-                              setActiveModalScheme(fullScheme);
-                              return;
-                            }
-                          }
-                          navigate(card.link);
-                        }
-                      }}
-                    >
-                      <img
-                        src={card.image}
-                        alt={card.title}
-                        className="sector-card-img"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.parentElement.style.background = 'linear-gradient(135deg, #092c57, #15803d)';
-                        }}
-                      />
-                      <div className="sector-card-overlay">
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <span className="sector-badge">
-                            <WifiOff size={12} /> {card.badge}
-                          </span>
-                          {hasDraft && (
-                            <span style={{
-                              fontSize: '0.68rem',
-                              fontWeight: 700,
-                              backgroundColor: '#fbbf24',
-                              color: '#78350f',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}>
-                              <FileCheck size={10} /> Draft Saved
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="sector-card-title">{t(card.title, card.titleKn)}</h3>
-                        <p className="sector-card-subtitle">{t(card.subtitle, card.subtitleKn)}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Architecture Highlights Card */}
-            <div className="card" style={{ marginTop: '8px', borderLeft: '4px solid #6b21a8', backgroundColor: 'var(--surface-card)' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--gov-blue-dark)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={18} color="#06b6d4" />
-                <span>OfflineBridge Synopsis & Technology Architecture</span>
-              </h3>
-              <p style={{ fontSize: '0.86rem', color: 'var(--text-subtle)', lineHeight: '1.5', marginBottom: '12px' }}>
-                OfflineBridge addresses connectivity drops for rural applicants. Built with <strong>React + Vite + Workbox Service Workers</strong>, <strong>Browser IndexedDB Layer</strong> for continuous draft preservation, and structured scheme-specific field definitions with verified Karnataka government requirements.
+              <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0, lineHeight: 1.4, flex: 1 }}>
+                {portal.sub}
               </p>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <Link to="/services" className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '8px 14px', minHeight: '38px' }}>
-                  <span>Fill Offline Forms</span>
-                  <ArrowRightIcon size={14} />
-                </Link>
-                <Link to="/eligibility" className="btn btn-outline" style={{ fontSize: '0.85rem', padding: '8px 14px', minHeight: '38px' }}>
-                  <span>Check Scheme Eligibility</span>
-                </Link>
-                <Link to="/tracking" className="btn btn-outline" style={{ fontSize: '0.85rem', padding: '8px 14px', minHeight: '38px' }}>
-                  <span>Track My Applications</span>
-                </Link>
-              </div>
-            </div>
-          </main>
-
-          {/* Right Column: Government Quick-Link Badges */}
-          <aside className="gov-portals-sidebar" aria-label="Official Rural Portals">
-            <h3 className="portal-sidebar-heading">
-              {isKannada ? 'ಸರ್ಕಾರಿ ಪೋರ್ಟಲ್‌ಗಳು' : 'Government Quick Portals'}
-            </h3>
-
-            {/* Sakala */}
-            <Link to="/services" className="gov-portal-badge-card" title="Sakala - Guarantee of Services to Citizens">
-              <div className="badge-brand-group">
-                <div className="badge-logo-box sakala">ಸ</div>
-                <div className="badge-text-group">
-                  <h5>Sakala Services</h5>
-                  <p>Guaranteed Timebound Delivery</p>
-                </div>
-              </div>
-              <span className="badge-action-pill">Open</span>
-            </Link>
-
-            {/* Janaspandana */}
-            <Link to="/grievance" className="gov-portal-badge-card" title="Janaspandana - Citizen Grievance Redressal">
-              <div className="badge-brand-group">
-                <div className="badge-logo-box janaspandana">ಜ</div>
-                <div className="badge-text-group">
-                  <h5>Janaspandana</h5>
-                  <p>Public Grievance Portal</p>
-                </div>
-              </div>
-              <span className="badge-action-pill">Grievance</span>
-            </Link>
-
-            {/* Seva Sindhu */}
-            <Link to="/services" className="gov-portal-badge-card" title="Seva Sindhu - One-Stop Digital Citizen Delivery">
-              <div className="badge-brand-group">
-                <div className="badge-logo-box sevasindhu">ಸೇ</div>
-                <div className="badge-text-group">
-                  <h5>Seva Sindhu</h5>
-                  <p>100+ Citizen Services</p>
-                </div>
-              </div>
-              <span className="badge-action-pill">Apply</span>
-            </Link>
-
-            {/* Kutumba */}
-            <Link to="/eligibility" className="gov-portal-badge-card" title="Kutumba - Entitlement Management System">
-              <div className="badge-brand-group">
-                <div className="badge-logo-box kutumba">ಕು</div>
-                <div className="badge-text-group">
-                  <h5>Kutumba System</h5>
-                  <p>Social Entitlement & Rules</p>
-                </div>
-              </div>
-              <span className="badge-action-pill">Check</span>
-            </Link>
-
-            {/* DigiLocker */}
-            <a
-              href="https://www.digilocker.gov.in"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="gov-portal-badge-card"
-              title="DigiLocker Document Wallet"
-            >
-              <div className="badge-brand-group">
-                <div className="badge-logo-box digilocker">DL</div>
-                <div className="badge-text-group">
-                  <h5>DigiLocker</h5>
-                  <p>Digital Certificate Storage</p>
-                </div>
-              </div>
-              <span className="badge-action-pill" style={{ backgroundColor: '#2563eb' }}>
-                <ExternalLink size={12} />
-              </span>
             </a>
-
-            {/* Kaveri 2.0 */}
-            <Link to="/services?category=it_services" className="gov-portal-badge-card" title="Kaveri 2.0 - Property & Land Records">
-              <div className="badge-brand-group">
-                <div className="badge-logo-box kaveri">ಕಾವೇ</div>
-                <div className="badge-text-group">
-                  <h5>Kaveri 2.0</h5>
-                  <p>Land Records & Valuation</p>
-                </div>
-              </div>
-              <span className="badge-action-pill" style={{ backgroundColor: '#d97706' }}>Explore</span>
-            </Link>
-
-            {/* Mahiti Kanaja */}
-            <a
-              href="https://mahitikanaja.karnataka.gov.in"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="gov-portal-badge-card"
-              title="Mahiti Kanaja Public Data"
-            >
-              <div className="badge-brand-group">
-                <div className="badge-logo-box" style={{ background: 'linear-gradient(135deg, #0d9488, #0f766e)' }}>ಮಾ</div>
-                <div className="badge-text-group">
-                  <h5>Mahiti Kanaja</h5>
-                  <p>Open Government Data</p>
-                </div>
-              </div>
-              <span className="badge-action-pill" style={{ backgroundColor: '#0d9488' }}>
-                <ExternalLink size={12} />
-              </span>
-            </a>
-          </aside>
+          ))}
         </div>
-      </div>
+      </section>
 
       {/* Direct Application Draft Modal */}
       {activeModalScheme && (

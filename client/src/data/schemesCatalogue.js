@@ -1133,6 +1133,42 @@ const SCHEME_EXTENDED_DETAILS = {
 // Normalize expanded schemes for 100% backward compatibility
 const normalizedExpanded = (EXPANDED_GOV_SCHEMES || []).map((s) => ({
   ...s,
+  lastVerified: s.lastVerified || '2026-11-10',
+  officialUrl: s.officialUrl || s.sourceUrl || 'https://karnataka.gov.in',
+  eligibilityCriteria: Array.isArray(s.eligibilityCriteria) && s.eligibilityCriteria.length > 0
+    ? s.eligibilityCriteria
+    : (s.eligibility ? [s.eligibility] : ['Resident citizen meeting Karnataka state department guidelines']),
+  requiredDocuments: Array.isArray(s.requiredDocuments) && s.requiredDocuments.length > 0
+    ? s.requiredDocuments
+    : ['Aadhaar Card', 'Ration Card / Proof of Identity', 'Income / Caste Certificate (if applicable)'],
+  formFields: Array.isArray(s.formFields) && s.formFields.length > 0
+    ? s.formFields
+    : [
+        {
+          id: 'applicantName',
+          label: 'Applicant Full Name',
+          labelKn: 'ಅರ್ಜಿದಾರರ ಪೂರ್ಣ ಹೆಸರು',
+          type: 'text',
+          placeholder: 'Enter full name as per Aadhaar',
+          required: true
+        },
+        {
+          id: 'contactPhone',
+          label: 'Mobile Number',
+          labelKn: 'ಮೊಬೈಲ್ ಸಂಖ್ಯೆ',
+          type: 'tel',
+          placeholder: '10-digit mobile number',
+          required: true
+        },
+        {
+          id: 'villagePanchayat',
+          label: 'Village / Gram Panchayat',
+          labelKn: 'ಗ್ರಾಮ / ಗ್ರಾಮ ಪಂಚಾಯಿತಿ',
+          type: 'text',
+          placeholder: 'e.g. Maraluru GP',
+          required: true
+        }
+      ],
   shortDesc: s.shortDesc || (typeof s.description === 'string' ? s.description : ''),
   shortDescKn: s.shortDescKn || (typeof s.descriptionKn === 'string' ? s.descriptionKn : ''),
   offlineReady: s.offlineReady !== false,

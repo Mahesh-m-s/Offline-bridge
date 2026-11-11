@@ -196,9 +196,9 @@ export async function updateApplicationStatus({
 }
 
 /**
- * Get Application by ID with authorization checks
+ * Get Application by ID or clientSubmissionId with authorization checks
  */
-export async function getApplicationById(applicationId, requestingUser) {
+export async function getApplicationById(applicationId, requestingUser = null) {
   const pool = getPool();
 
   const query = `
@@ -210,16 +210,17 @@ export async function getApplicationById(applicationId, requestingUser) {
     FROM applications a
     JOIN schemes s ON a.scheme_id = s.id
     LEFT JOIN users u ON a.user_id = u.id
-    WHERE a.id = $1
+    WHERE a.id::text = $1 OR a.client_submission_id = $1
+    LIMIT 1
   `;
 
-  const result = await pool.query(query, [applicationId]);
+  const result = await pool.query(query, [applicationId.trim()]);
   const app = result.rows[0];
 
   if (!app) return null;
 
-  // Enforce ownership: Citizen can ONLY access their own application
-  if (requestingUser.role === 'citizen' && String(app.user_id) !== String(requestingUser.id)) {
+  // Enforce ownership if authenticated as citizen: Citizen can ONLY view full form details of their own application
+  if (requestingUser && requestingUser.role === 'citizen' && String(app.user_id) !== String(requestingUser.id)) {
     const err = new Error('Access forbidden. You do not have permission to view another citizen’s application.');
     err.code = 'FORBIDDEN';
     err.status = 403;
@@ -234,7 +235,7 @@ export async function getApplicationById(applicationId, requestingUser) {
     WHERE h.application_id = $1
     ORDER BY h.created_at ASC
   `;
-  const historyRes = await pool.query(historyQuery, [applicationId]);
+  const historyRes = await pool.query(historyQuery, [app.id]);
   app.status_history = historyRes.rows;
 
   return app;

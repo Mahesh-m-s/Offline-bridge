@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { listApplicationsApi, updateApplicationStatusApi } from '../api/applications';
+import { listGrievancesApi, updateGrievanceStatusApi } from '../api/grievances';
 import {
   Building2,
   FileCheck,
@@ -20,188 +22,137 @@ import {
   Shield,
   Send,
   Calendar,
-  UserCheck
+  UserCheck,
+  RefreshCw,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
-
-// Representative Department Scrutiny Applications (for Desk Scrutiny Demonstration)
-const INITIAL_APPLICATIONS = [
-  {
-    id: 'KAR-2026-AGRI-8821',
-    schemeId: 'krishi-samruddhi',
-    schemeTitle: 'Krishi Samruddhi Yojana (ಕೃಷಿ ಸಮೃದ್ಧಿ ಯೋಜನೆ)',
-    department: 'Department of Agriculture',
-    applicantName: 'Basavaraju M.',
-    applicantPhone: '98451-XXXXX',
-    district: 'Mysuru',
-    taluk: 'Hunsur',
-    submittedAt: '2026-10-12T10:30:00Z',
-    status: 'Submitted',
-    cropType: 'Ragi & Pulses',
-    landHolding: '2.4 Acres (Marginal Farmer)',
-    declaredAnnualIncome: '₹75,000',
-    documents: [
-      { name: 'RTC / Pahani Land Record', verified: true, docRef: 'RTC-2026-HUN-901' },
-      { name: 'Aadhaar Card (Seeded)', verified: true, docRef: 'UID-XXXX-XXXX-4412' },
-      { name: 'Small/Marginal Farmer Certificate', verified: false, docRef: 'Pending physical stamp' }
-    ],
-    history: [
-      { timestamp: '2026-10-12T10:30:00Z', actor: 'Citizen (Online)', action: 'Application Submitted', remarks: 'Self-declaration and land documents uploaded.' }
-    ]
-  },
-  {
-    id: 'KAR-2026-AGRI-9104',
-    schemeId: 'pm-kusum-b',
-    schemeTitle: 'PM-KUSUM Component B — Solar Irrigation Pumps',
-    department: 'Department of Agriculture',
-    applicantName: 'Kaveramma Chennappa',
-    applicantPhone: '94480-XXXXX',
-    district: 'Mandya',
-    taluk: 'Pandavapura',
-    submittedAt: '2026-10-09T14:15:00Z',
-    status: 'Under Review',
-    cropType: 'Sugarcane & Paddy',
-    landHolding: '4.1 Acres',
-    declaredAnnualIncome: '₹1,20,000',
-    documents: [
-      { name: 'RTC / Pahani Land Record', verified: true, docRef: 'RTC-2026-PAN-331' },
-      { name: 'Borewell Yield Certificate', verified: true, docRef: 'GW-2026-4421' },
-      { name: 'Electricity Utility Non-Connection Certificate', verified: true, docRef: 'CESC-NOC-99' }
-    ],
-    history: [
-      { timestamp: '2026-10-09T14:15:00Z', actor: 'Citizen (Online)', action: 'Application Submitted', remarks: 'Uploaded borewell survey and NOC.' },
-      { timestamp: '2026-10-11T11:00:00Z', actor: 'KAR-OFF-001 (Scrutiny Officer)', action: 'Moved to Under Review', remarks: 'Awaiting site inspection from Junior Engineer.' }
-    ]
-  },
-  {
-    id: 'KAR-2026-ENRG-4019',
-    schemeId: 'gruha-jyothi',
-    schemeTitle: 'Gruha Jyothi Scheme (ಗೃಹ ಜ್ಯೋತಿ ಯೋಜನೆ)',
-    department: 'Department of Energy (Bescom/Cesc/Hescom/Gescom/Mescom)',
-    applicantName: 'Shivarudraiah B.',
-    applicantPhone: '97401-XXXXX',
-    district: 'Hassan',
-    taluk: 'Channarayapatna',
-    submittedAt: '2026-10-05T09:00:00Z',
-    status: 'Approved',
-    cropType: 'N/A (Domestic Consumer)',
-    landHolding: 'Residential (Account ID: CESC-7741029)',
-    declaredAnnualIncome: '₹95,000',
-    documents: [
-      { name: 'Electricity Consumer Bill (Recent)', verified: true, docRef: 'CESC-2026-SEP-BILL' },
-      { name: 'Aadhaar Card Linked to RR Number', verified: true, docRef: 'UID-XXXX-XXXX-8821' }
-    ],
-    history: [
-      { timestamp: '2026-10-05T09:00:00Z', actor: 'Citizen (Online)', action: 'Application Submitted', remarks: 'Linked RR Number with Consumer Aadhaar.' },
-      { timestamp: '2026-10-06T15:30:00Z', actor: 'KAR-OFF-088 (CESC Officer)', action: 'Moved to Under Review', remarks: 'Verified 12-month historical consumption average (78 units).' },
-      { timestamp: '2026-10-07T12:00:00Z', actor: 'KAR-OFF-088 (CESC Officer)', action: 'Application Sanctioned', remarks: 'Sanction Order: GJ/2026/HAS/4412. Zero-bill benefit active.' }
-    ]
-  },
-  {
-    id: 'KAR-2026-WCD-1192',
-    schemeId: 'gruha-lakshmi',
-    schemeTitle: 'Gruha Lakshmi Scheme (ಗೃಹ ಲಕ್ಷ್ಮಿ ಯೋಜನೆ)',
-    department: 'Department of Women and Child Development',
-    applicantName: 'Parvathamma W/o Mahadevappa',
-    applicantPhone: '99002-XXXXX',
-    district: 'Mysuru',
-    taluk: 'Nanjangud',
-    submittedAt: '2026-10-14T16:20:00Z',
-    status: 'Submitted',
-    cropType: 'N/A (Woman Head of Family)',
-    landHolding: 'BPL Ration Card Holder',
-    declaredAnnualIncome: '₹60,000',
-    documents: [
-      { name: 'Antyodaya / BPL Ration Card', verified: true, docRef: 'RC-BPL-2026-NAN-09' },
-      { name: 'Bank Passbook (Aadhaar Seeded)', verified: true, docRef: 'KGB-AC-889102' }
-    ],
-    history: [
-      { timestamp: '2026-10-14T16:20:00Z', actor: 'Citizen (Grama One Desk)', action: 'Application Submitted', remarks: 'Applied via Grama One center with BPL card.' }
-    ]
-  }
-];
 
 export default function OfficialPortalPage() {
   const { currentUser, logout } = useAuth();
   const { isKannada } = useLanguage();
   const navigate = useNavigate();
 
-  // Active department filter: defaults to logged in officer's assigned department
-  const [filterDept, setFilterDept] = useState(currentUser?.department || 'Department of Agriculture');
+  // Active desk tab: 'applications' | 'grievances'
+  const [activeDeskTab, setActiveDeskTab] = useState('applications');
+
+  // Filter state
+  const [filterDept, setFilterDept] = useState('All Departments');
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [applications, setApplications] = useState(INITIAL_APPLICATIONS);
 
-  // Inspection Drawer Modal State
+  // Live database data
+  const [applications, setApplications] = useState([]);
+  const [grievances, setGrievances] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Scrutiny Inspection Modal State
   const [selectedApp, setSelectedApp] = useState(null);
   const [officialRemarks, setOfficialRemarks] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [actionSuccessNotice, setActionSuccessNotice] = useState(null);
+
+  // Load live applications and grievances from PostgreSQL
+  const loadOfficialQueue = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [appRes, grvRes] = await Promise.all([
+        listApplicationsApi({ limit: 100 }),
+        listGrievancesApi({ limit: 100 })
+      ]);
+
+      if (appRes.success && Array.isArray(appRes.data)) {
+        setApplications(appRes.data);
+      }
+      if (grvRes.success && Array.isArray(grvRes.data)) {
+        setGrievances(grvRes.data);
+      }
+    } catch (err) {
+      setError('Unable to load departmental queues from server.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOfficialQueue();
+  }, [loadOfficialQueue]);
 
   const handleLogout = () => {
     logout();
     navigate('/login/official');
   };
 
-  // Filter applications by assigned department, status, and search query
+  // Filter applications by status and search query
   const filteredApps = applications.filter((app) => {
-    // If not viewing "All Departments", match assigned department
-    if (filterDept !== 'All Departments' && app.department !== filterDept) {
+    if (filterStatus !== 'All' && app.status?.toLowerCase() !== filterStatus.toLowerCase()) {
       return false;
     }
-    // Filter by status tab
-    if (filterStatus !== 'All' && app.status !== filterStatus) {
-      return false;
-    }
-    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
-        app.id.toLowerCase().includes(q) ||
-        app.applicantName.toLowerCase().includes(q) ||
-        app.schemeTitle.toLowerCase().includes(q) ||
-        app.district.toLowerCase().includes(q)
+        app.id?.toLowerCase().includes(q) ||
+        (app.applicant_name && app.applicant_name.toLowerCase().includes(q)) ||
+        (app.scheme_title && app.scheme_title.toLowerCase().includes(q)) ||
+        (app.village_panchayat && app.village_panchayat.toLowerCase().includes(q))
       );
     }
     return true;
   });
 
-  // Handle Official Workflow Status Transitions (Prototype Scrutiny UI)
-  const handleTransition = (newStatus, actionName) => {
-    if (!officialRemarks.trim() && (newStatus === 'Rejected' || actionName.includes('Request'))) {
-      alert('Official remarks are mandatory when requesting information or rejecting an application.');
+  // Handle Official Status Transition (Direct PostgreSQL update)
+  const handleTransition = async (newStatus, actionName) => {
+    if (!officialRemarks.trim() && (newStatus === 'rejected' || actionName.includes('Request'))) {
+      alert('Official remarks are mandatory when requesting additional information or rejecting an application.');
       return;
     }
 
-    const updatedApp = {
-      ...selectedApp,
-      status: newStatus,
-      history: [
-        ...selectedApp.history,
-        {
-          timestamp: new Date().toISOString(),
-          actor: `${currentUser?.staffId || 'KAR-OFF-001'} (${currentUser?.name || 'Scrutiny Officer'})`,
-          action: actionName,
-          remarks: officialRemarks.trim() || `Application moved to ${newStatus} by scrutiny officer.`
-        }
-      ]
-    };
+    setIsUpdatingStatus(true);
+    try {
+      const res = await updateApplicationStatusApi(selectedApp.id, {
+        status: newStatus,
+        remarks: officialRemarks.trim() || `Application moved to ${newStatus} by scrutiny officer.`
+      });
 
-    setApplications((prev) => prev.map((a) => (a.id === selectedApp.id ? updatedApp : a)));
-    setSelectedApp(updatedApp);
-    setOfficialRemarks('');
-    setActionSuccessNotice(`Status updated to "${newStatus}". Note: Real server status persistence requires backend token authentication.`);
-    setTimeout(() => setActionSuccessNotice(null), 4000);
+      if (res.success) {
+        setActionSuccessNotice(`Application status successfully updated to "${newStatus}" in PostgreSQL!`);
+        setSelectedApp(null);
+        setOfficialRemarks('');
+        await loadOfficialQueue();
+        setTimeout(() => setActionSuccessNotice(null), 4000);
+      } else {
+        throw new Error(res.error?.message || 'Server rejected status update.');
+      }
+    } catch (err) {
+      alert('Error updating status: ' + err.message);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const formatTimestamp = (isoString) => {
+    if (!isoString) return '—';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ', ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return isoString;
+    }
   };
 
   return (
-    <div className="gov-page-container" style={{ maxWidth: '1200px', margin: '24px auto', padding: '0 16px' }}>
+    <div className="gov-page-container" style={{ maxWidth: '1240px', margin: '24px auto', padding: '0 16px' }}>
       
       {/* Official Header Banner */}
       <div style={{
         backgroundColor: '#ffffff',
         border: '1px solid #e2e8f0',
-        borderRadius: '10px',
+        borderRadius: '12px',
         padding: '20px 24px',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+        boxShadow: '0 4px 16px rgba(16, 47, 86, 0.05)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -215,7 +166,7 @@ export default function OfficialPortalPage() {
             height: '52px',
             borderRadius: '50%',
             backgroundColor: '#ecfdf5',
-            color: '#059669',
+            color: '#16834A',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -226,27 +177,48 @@ export default function OfficialPortalPage() {
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#102F56', margin: 0 }}>
                 {currentUser?.name || 'Department Scrutiny Officer'}
               </h1>
               <span style={{
-                backgroundColor: '#ecfdf5',
-                color: '#059669',
+                backgroundColor: '#DCFCE7',
+                color: '#16834A',
                 padding: '2px 8px',
                 borderRadius: '999px',
-                fontSize: '0.75rem',
+                fontSize: '0.74rem',
                 fontWeight: 700
               }}>
-                Staff ID: {currentUser?.staffId || 'KAR-AGRI-104'}
+                Role: Government Official
               </span>
             </div>
-            <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-              <strong>Assigned Department:</strong> {currentUser?.department || 'Department of Agriculture'}
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748B' }}>
+              <strong>Jurisdiction:</strong> {currentUser?.villagePanchayat || 'Taluk Office, Karnataka'} • Mobile: {currentUser?.phone || 'Authorized'}
             </p>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={loadOfficialQueue}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              backgroundColor: '#EFF6FF',
+              color: '#1556A0',
+              borderRadius: '6px',
+              border: '1px solid #BFDBFE',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            <RefreshCw size={14} className={isLoading ? 'spin-animate' : ''} />
+            <span>Refresh Queue</span>
+          </button>
+
           <button
             type="button"
             onClick={handleLogout}
@@ -269,29 +241,79 @@ export default function OfficialPortalPage() {
         </div>
       </div>
 
-      {/* Honest Prototype Notice */}
-      <div style={{
-        backgroundColor: '#fffbeb',
-        border: '1px solid #fef3c7',
-        borderLeft: '4px solid #f59e0b',
-        padding: '12px 16px',
-        borderRadius: '6px',
-        marginBottom: '20px',
-        fontSize: '0.82rem',
-        color: '#92400e',
-        lineHeight: 1.5
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '2px' }}>
-          <AlertCircle size={16} /> Official Desk Scrutiny UI — Lifecycle & Verification Prototype
+      {actionSuccessNotice && (
+        <div style={{
+          backgroundColor: '#F0FDF4',
+          border: '1px solid #BBF7D0',
+          color: '#166534',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '0.9rem'
+        }}>
+          <CheckCircle2 size={18} />
+          <span>{actionSuccessNotice}</span>
         </div>
-        This console demonstrates the 4-stage government scrutiny workflow: <code>Submitted → Under Review → Approved / Rejected</code>. Status updates and remarks update the active session desk state. Live database commits will be authorized via server-side token authentication once the official review endpoint (<code>/api/official/applications/:id/status</code>) is deployed.
+      )}
+
+      {/* Desk Tabs: Applications vs Grievances */}
+      <div style={{
+        display: 'flex',
+        borderBottom: '2px solid #E2E8F0',
+        marginBottom: '20px',
+        gap: '10px'
+      }}>
+        <button
+          type="button"
+          onClick={() => setActiveDeskTab('applications')}
+          style={{
+            padding: '10px 18px',
+            background: 'none',
+            border: 'none',
+            borderBottom: activeDeskTab === 'applications' ? '3px solid #16834A' : 'none',
+            fontWeight: activeDeskTab === 'applications' ? 800 : 600,
+            color: activeDeskTab === 'applications' ? '#16834A' : '#64748B',
+            cursor: 'pointer',
+            fontSize: '0.92rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <FileCheck size={17} />
+          <span>Application Scrutiny Queue ({applications.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveDeskTab('grievances')}
+          style={{
+            padding: '10px 18px',
+            background: 'none',
+            border: 'none',
+            borderBottom: activeDeskTab === 'grievances' ? '3px solid #16834A' : 'none',
+            fontWeight: activeDeskTab === 'grievances' ? 800 : 600,
+            color: activeDeskTab === 'grievances' ? '#16834A' : '#64748B',
+            cursor: 'pointer',
+            fontSize: '0.92rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <AlertCircle size={17} />
+          <span>Janaspandana Grievance Desk ({grievances.length})</span>
+        </button>
       </div>
 
       {/* Scrutiny Controls & Filters */}
       <div style={{
         backgroundColor: '#ffffff',
         border: '1px solid #e2e8f0',
-        borderRadius: '8px',
+        borderRadius: '10px',
         padding: '16px 20px',
         marginBottom: '20px',
         display: 'flex',
@@ -302,11 +324,8 @@ export default function OfficialPortalPage() {
       }}>
         {/* Status Tabs */}
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {['All', 'Submitted', 'Under Review', 'Approved', 'Rejected'].map((status) => {
-            const count = applications.filter(a => {
-              const deptMatch = filterDept === 'All Departments' || a.department === filterDept;
-              return deptMatch && (status === 'All' || a.status === status);
-            }).length;
+          {['All', 'submitted', 'under_review', 'approved', 'rejected'].map((status) => {
+            const count = applications.filter((a) => status === 'All' || a.status?.toLowerCase() === status).length;
 
             return (
               <button
@@ -316,7 +335,7 @@ export default function OfficialPortalPage() {
                 style={{
                   padding: '6px 12px',
                   borderRadius: '6px',
-                  border: filterStatus === status ? '1px solid #059669' : '1px solid #e2e8f0',
+                  border: filterStatus === status ? '1px solid #16834A' : '1px solid #e2e8f0',
                   backgroundColor: filterStatus === status ? '#ecfdf5' : '#ffffff',
                   color: filterStatus === status ? '#065f46' : '#475569',
                   fontSize: '0.82rem',
@@ -324,12 +343,13 @@ export default function OfficialPortalPage() {
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  gap: '6px',
+                  textTransform: 'capitalize'
                 }}
               >
-                <span>{status === 'Approved' ? 'Sanctioned' : status}</span>
+                <span>{status === 'approved' ? 'Sanctioned' : status.replace('_', ' ')}</span>
                 <span style={{
-                  backgroundColor: filterStatus === status ? '#059669' : '#f1f5f9',
+                  backgroundColor: filterStatus === status ? '#16834A' : '#f1f5f9',
                   color: filterStatus === status ? '#ffffff' : '#64748b',
                   fontSize: '0.72rem',
                   padding: '1px 6px',
@@ -343,104 +363,103 @@ export default function OfficialPortalPage() {
           })}
         </div>
 
-        {/* Department Switcher & Search */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            value={filterDept}
-            onChange={(e) => setFilterDept(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              fontSize: '0.82rem',
-              backgroundColor: '#ffffff'
-            }}
-          >
-            <option value="Department of Agriculture">Dept: Agriculture</option>
-            <option value="Department of Energy (Bescom/Cesc/Hescom/Gescom/Mescom)">Dept: Energy</option>
-            <option value="Department of Women and Child Development">Dept: Women & Child Dev</option>
-            <option value="All Departments">All Departments (Jurisdiction View)</option>
-          </select>
-
+        {/* Search Input */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#94a3b8' }} />
+            <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
             <input
               type="text"
-              placeholder="Search Ref ID or Name..."
+              placeholder="Search by ID, applicant, or village..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
-                padding: '8px 12px 8px 30px',
+                padding: '7px 12px 7px 32px',
                 borderRadius: '6px',
                 border: '1px solid #cbd5e1',
-                fontSize: '0.82rem',
-                width: '180px'
+                fontSize: '0.84rem',
+                outline: 'none',
+                minWidth: '220px'
               }}
             />
           </div>
         </div>
       </div>
 
-      {/* Applications Scrutiny Queue Table */}
-      <div style={{
-        backgroundColor: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-        marginBottom: '28px'
-      }}>
-        {filteredApps.length === 0 ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
-            <FileCheck size={36} style={{ margin: '0 auto 8px auto', opacity: 0.4 }} />
-            <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600 }}>No applications matching the selected criteria</p>
-            <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem' }}>Check filter parameters or switch department view.</p>
+      {/* Main Scrutiny Queue */}
+      {activeDeskTab === 'applications' ? (
+        isLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>
+            <RefreshCw size={24} className="spin-animate" style={{ margin: '0 auto 8px' }} />
+            <p>Loading application scrutiny queue...</p>
+          </div>
+        ) : filteredApps.length === 0 ? (
+          <div style={{
+            backgroundColor: '#ffffff',
+            border: '1px dashed #cbd5e1',
+            borderRadius: '10px',
+            padding: '40px 20px',
+            textAlign: 'center',
+            color: '#64748b'
+          }}>
+            <FileCheck size={36} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 4px 0', color: '#102F56' }}>
+              No applications match this filter
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.86rem' }}>
+              Incoming citizen applications submitted online or synced via offline bridge will appear here in real-time.
+            </p>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>
-                <th style={{ padding: '12px 16px' }}>Application Ref</th>
-                <th style={{ padding: '12px 16px' }}>Scheme Title</th>
-                <th style={{ padding: '12px 16px' }}>Applicant & Location</th>
-                <th style={{ padding: '12px 16px' }}>Date Submitted</th>
-                <th style={{ padding: '12px 16px' }}>Current Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Scrutiny Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredApps.map((app) => {
-                let badgeStyle = { backgroundColor: '#f1f5f9', color: '#475569' };
-                if (app.status === 'Submitted') badgeStyle = { backgroundColor: '#eff6ff', color: '#1d4ed8' };
-                else if (app.status === 'Under Review') badgeStyle = { backgroundColor: '#fffbeb', color: '#b45309' };
-                else if (app.status === 'Approved') badgeStyle = { backgroundColor: '#ecfdf5', color: '#047857' };
-                else if (app.status === 'Rejected') badgeStyle = { backgroundColor: '#fef2f2', color: '#b91c1c' };
-
-                return (
-                  <tr key={app.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '12px 16px', fontWeight: 700, color: '#0f172a' }}>
-                      {app.id}
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '10px',
+            border: '1px solid #e2e8f0',
+            overflow: 'hidden',
+            boxShadow: '0 2px 8px rgba(16, 47, 86, 0.04)'
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.86rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontWeight: 700 }}>
+                  <th style={{ padding: '12px 16px' }}>Application ID</th>
+                  <th style={{ padding: '12px 16px' }}>Scheme / Service</th>
+                  <th style={{ padding: '12px 16px' }}>Applicant</th>
+                  <th style={{ padding: '12px 16px' }}>Location</th>
+                  <th style={{ padding: '12px 16px' }}>Date</th>
+                  <th style={{ padding: '12px 16px' }}>Status</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Scrutiny Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredApps.map((app) => (
+                  <tr key={app.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, color: '#102F56' }}>
+                      <code>{app.id?.slice(0, 8)}...</code>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <strong style={{ display: 'block', color: '#1e293b' }}>{app.schemeTitle}</strong>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{app.department}</span>
+                      <div style={{ fontWeight: 700, color: '#102F56' }}>{app.scheme_title}</div>
+                      <div style={{ fontSize: '0.74rem', color: '#64748B' }}>{app.scheme_department}</div>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ display: 'block', fontWeight: 600 }}>{app.applicantName}</span>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{app.taluk}, {app.district}</span>
+                      <div><strong>{app.applicant_name || 'Citizen'}</strong></div>
+                      <div style={{ fontSize: '0.74rem', color: '#64748B' }}>{app.applicant_phone || '—'}</div>
                     </td>
-                    <td style={{ padding: '12px 16px', color: '#64748b' }}>
-                      {new Date(app.submittedAt).toLocaleDateString()}
+                    <td style={{ padding: '12px 16px', color: '#475569' }}>
+                      {app.village_panchayat || 'Karnataka'}
+                    </td>
+                    <td style={{ padding: '12px 16px', color: '#64748B', whiteSpace: 'nowrap' }}>
+                      {formatTimestamp(app.created_at)}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <span style={{
-                        ...badgeStyle,
+                        fontSize: '0.74rem',
+                        fontWeight: 800,
                         padding: '3px 8px',
-                        borderRadius: '999px',
-                        fontSize: '0.75rem',
-                        fontWeight: 700
+                        borderRadius: '4px',
+                        backgroundColor: app.status === 'approved' ? '#DCFCE7' : app.status === 'rejected' ? '#FEE2E2' : '#EFF6FF',
+                        color: app.status === 'approved' ? '#166534' : app.status === 'rejected' ? '#991B1B' : '#1E40AF',
+                        textTransform: 'capitalize'
                       }}>
-                        {app.status === 'Approved' ? 'Sanctioned' : app.status}
+                        ● {app.status?.replace('_', ' ')}
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
@@ -448,288 +467,241 @@ export default function OfficialPortalPage() {
                         type="button"
                         onClick={() => setSelectedApp(app)}
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '6px 12px',
-                          backgroundColor: '#059669',
-                          color: '#ffffff',
+                          padding: '6px 14px',
+                          backgroundColor: '#1556A0',
+                          color: '#FFFFFF',
                           border: 'none',
-                          borderRadius: '4px',
+                          borderRadius: '6px',
                           fontSize: '0.8rem',
-                          fontWeight: 600,
+                          fontWeight: 700,
                           cursor: 'pointer'
                         }}
                       >
-                        <Eye size={14} /> Scrutinize
+                        Scrutinize →
                       </button>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* SCRUTINY INSPECTION DRAWER / MODAL */}
-      {selectedApp && (
-        <div className="modal-overlay" onClick={() => setSelectedApp(null)} role="dialog" aria-modal="true">
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '780px' }}>
-            <div className="modal-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '14px' }}>
-              <div>
-                <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700, textTransform: 'uppercase' }}>
-                  Desk Scrutiny Dossier
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : (
+        /* Grievances Queue */
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+          {grievances.map((grv) => (
+            <div
+              key={grv.id}
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                borderLeft: '4px solid #D99016',
+                padding: '18px',
+                boxShadow: '0 2px 6px rgba(16, 47, 86, 0.04)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#D99016', textTransform: 'uppercase' }}>
+                  {grv.category}
                 </span>
-                <h3 style={{ margin: '2px 0 0 0', fontSize: '1.2rem', color: '#0f172a' }}>
-                  {selectedApp.id} — {selectedApp.applicantName}
+                <span style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  backgroundColor: grv.status === 'resolved' ? '#DCFCE7' : '#EFF6FF',
+                  color: grv.status === 'resolved' ? '#166534' : '#1E40AF'
+                }}>
+                  {grv.status}
+                </span>
+              </div>
+
+              <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#102F56', margin: '0 0 6px 0' }}>
+                {grv.description}
+              </h4>
+
+              <div style={{ fontSize: '0.8rem', color: '#64748B', marginBottom: '6px' }}>
+                Location: <strong>{grv.village_panchayat}</strong>
+              </div>
+
+              <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                Complainant: {grv.complainant_name || 'Citizen'} • Phone: {grv.contact_phone || '—'}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Official Scrutiny Drawer Modal */}
+      {selectedApp && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(16, 47, 86, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '16px'
+        }} role="dialog" aria-modal="true">
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '14px',
+            maxWidth: '680px',
+            width: '100%',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 20px 40px rgba(16, 47, 86, 0.3)',
+            overflow: 'hidden'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#F8FAFC'
+            }}>
+              <div>
+                <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#1556A0', textTransform: 'uppercase' }}>
+                  Desk Scrutiny Console
+                </span>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#102F56', margin: '2px 0 0 0' }}>
+                  {selectedApp.scheme_title}
                 </h3>
               </div>
               <button
                 type="button"
-                className="modal-close-btn"
                 onClick={() => setSelectedApp(null)}
-                aria-label="Close scrutiny drawer"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
               >
-                <X size={20} />
+                <X size={22} />
               </button>
             </div>
 
-            <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
-              {actionSuccessNotice && (
-                <div style={{
-                  backgroundColor: '#ecfdf5',
-                  border: '1px solid #a7f3d0',
-                  padding: '10px 14px',
-                  borderRadius: '6px',
-                  color: '#065f46',
-                  fontSize: '0.82rem',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <CheckCircle2 size={16} /> {actionSuccessNotice}
-                </div>
-              )}
-
-              {/* Status Banner */}
+            {/* Modal Body */}
+            <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
               <div style={{
-                backgroundColor: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '6px',
-                padding: '12px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '16px'
+                backgroundColor: '#F8FAFC',
+                borderRadius: '8px',
+                border: '1px solid #E2E8F0',
+                padding: '16px',
+                marginBottom: '18px',
+                fontSize: '0.86rem',
+                lineHeight: 1.5
               }}>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Current Application Lifecycle Stage</span>
-                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                    {selectedApp.status === 'Approved' ? 'Sanctioned / Approved' : selectedApp.status}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '8px' }}>
+                  <div><strong>Application ID:</strong> <code>{selectedApp.id}</code></div>
+                  <div><strong>Submission Date:</strong> {formatTimestamp(selectedApp.created_at)}</div>
+                  <div><strong>Applicant:</strong> {selectedApp.applicant_name || 'Citizen'}</div>
+                  <div><strong>Phone:</strong> {selectedApp.applicant_phone || '—'}</div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <strong>Panchayat / Location:</strong> {selectedApp.village_panchayat}
                   </div>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  Submitted: {new Date(selectedApp.submittedAt).toLocaleDateString()}
-                </div>
+
+                {/* Form Data */}
+                {selectedApp.form_data && Object.keys(selectedApp.form_data).length > 0 && (
+                  <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '10px', marginTop: '10px' }}>
+                    <strong>Applicant Form Data:</strong>
+                    <pre style={{
+                      marginTop: '6px',
+                      backgroundColor: '#FFFFFF',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      border: '1px solid #E2E8F0',
+                      fontSize: '0.78rem',
+                      overflowX: 'auto'
+                    }}>
+                      {JSON.stringify(selectedApp.form_data, null, 2)}
+                    </pre>
+                  </div>
+                )}
               </div>
 
-              {/* Applicant & Criteria Declarations */}
+              {/* Remarks Field */}
               <div style={{ marginBottom: '18px' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', margin: '0 0 10px 0' }}>
-                  Applicant Declared Information
-                </h4>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: '10px',
-                  fontSize: '0.82rem',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  padding: '12px'
-                }}>
-                  <div><strong>Applicant:</strong> {selectedApp.applicantName}</div>
-                  <div><strong>Contact:</strong> {selectedApp.applicantPhone}</div>
-                  <div><strong>District:</strong> {selectedApp.district}</div>
-                  <div><strong>Taluk / Panchayat:</strong> {selectedApp.taluk}</div>
-                  <div><strong>Holding / Category:</strong> {selectedApp.landHolding}</div>
-                  <div><strong>Declared Income:</strong> {selectedApp.declaredAnnualIncome}</div>
-                  {selectedApp.cropType && <div><strong>Cultivation / Crops:</strong> {selectedApp.cropType}</div>}
-                </div>
-              </div>
-
-              {/* Documents Scrutiny Checklist */}
-              <div style={{ marginBottom: '18px' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', margin: '0 0 10px 0' }}>
-                  Supporting Documents Checklist
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {selectedApp.documents.map((doc, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid #e2e8f0',
-                        backgroundColor: '#f8fafc',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        fontSize: '0.82rem'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <FileText size={16} color="#64748b" />
-                        <div>
-                          <strong>{doc.name}</strong>
-                          <span style={{ display: 'block', fontSize: '0.74rem', color: '#64748b' }}>
-                            Ref: {doc.docRef}
-                          </span>
-                        </div>
-                      </div>
-                      <span style={{
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        color: doc.verified ? '#059669' : '#d97706',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}>
-                        {doc.verified ? <CheckCircle2 size={14} /> : <Clock size={14} />}
-                        {doc.verified ? 'Verified Document' : 'Pending Physical Verification'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Status Audit Trail */}
-              <div style={{ marginBottom: '20px' }}>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', margin: '0 0 10px 0' }}>
-                  Audit Trail & Status Progression
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: '2px solid #e2e8f0', paddingLeft: '12px' }}>
-                  {selectedApp.history.map((h, i) => (
-                    <div key={i} style={{ fontSize: '0.8rem', color: '#475569' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#0f172a' }}>
-                        <span>{h.action}</span>
-                        <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 400 }}>
-                          • {new Date(h.timestamp).toLocaleString()}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: '#059669' }}>Actor: {h.actor}</div>
-                      <div style={{ color: '#64748b', marginTop: '2px' }}>Remarks: "{h.remarks}"</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Official Scrutiny Action Desk */}
-              <div style={{
-                backgroundColor: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: '8px',
-                padding: '16px'
-              }}>
-                <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#166534', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <UserCheck size={18} /> Official Action & Scrutiny Remarks
-                </h4>
-                <p style={{ margin: '0 0 10px 0', fontSize: '0.8rem', color: '#15803d' }}>
-                  Enter official findings, verification remarks, or deficiency queries below before updating status:
-                </p>
-
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: '#102F56', marginBottom: '6px' }}>
+                  Official Scrutiny Remarks <span style={{ color: '#DC2626' }}>*</span>
+                </label>
                 <textarea
                   rows={3}
+                  placeholder="Record mandatory scrutiny findings, document verification details, or sanction remarks..."
                   value={officialRemarks}
                   onChange={(e) => setOfficialRemarks(e.target.value)}
-                  placeholder="Enter scrutiny remarks, e.g.: 'Land survey report matched RTC. Field inspection verified irrigation requirement.'"
                   style={{
                     width: '100%',
-                    padding: '8px 12px',
+                    padding: '10px 12px',
                     borderRadius: '6px',
-                    border: '1px solid #86efac',
-                    fontSize: '0.85rem',
-                    marginBottom: '12px'
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.88rem',
+                    fontFamily: 'inherit'
                   }}
                 />
+              </div>
 
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {selectedApp.status === 'Submitted' && (
-                    <button
-                      type="button"
-                      onClick={() => handleTransition('Under Review', 'Initiated Desk Scrutiny')}
-                      style={{
-                        padding: '8px 14px',
-                        backgroundColor: '#d97706',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Move to Under Review
-                    </button>
-                  )}
+              {/* Status Decision Buttons */}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  disabled={isUpdatingStatus}
+                  onClick={() => handleTransition('under_review', 'Moved to Under Review')}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    backgroundColor: '#EFF6FF',
+                    color: '#1556A0',
+                    border: '1px solid #BFDBFE',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.86rem'
+                  }}
+                >
+                  Mark Under Review
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleTransition('Under Review', 'Clarification Requested')}
-                    style={{
-                      padding: '8px 14px',
-                      backgroundColor: '#f1f5f9',
-                      color: '#334155',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      fontSize: '0.82rem',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Request Documents / Info
-                  </button>
+                <button
+                  type="button"
+                  disabled={isUpdatingStatus}
+                  onClick={() => handleTransition('rejected', 'Application Rejected')}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    backgroundColor: '#FEF2F2',
+                    color: '#DC2626',
+                    border: '1px solid #FECACA',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.86rem'
+                  }}
+                >
+                  Reject with Remarks
+                </button>
 
-                  {selectedApp.status !== 'Approved' && (
-                    <button
-                      type="button"
-                      onClick={() => handleTransition('Approved', 'Sanctioned Scheme Benefit')}
-                      style={{
-                        padding: '8px 14px',
-                        backgroundColor: '#059669',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Sanction / Approve Scheme
-                    </button>
-                  )}
-
-                  {selectedApp.status !== 'Rejected' && (
-                    <button
-                      type="button"
-                      onClick={() => handleTransition('Rejected', 'Application Rejected')}
-                      style={{
-                        padding: '8px 14px',
-                        backgroundColor: '#ef4444',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Reject Application
-                    </button>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  disabled={isUpdatingStatus}
+                  onClick={() => handleTransition('approved', 'Application Sanctioned')}
+                  style={{
+                    flex: 1.2,
+                    padding: '10px',
+                    backgroundColor: '#16834A',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.86rem'
+                  }}
+                >
+                  Sanction & Approve
+                </button>
               </div>
             </div>
           </div>

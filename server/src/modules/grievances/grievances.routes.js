@@ -3,12 +3,19 @@ import {
   handleSubmitGrievance,
   handleGetMyGrievances,
   handleListGrievances,
-  handleUpdateGrievanceStatus
+  handleUpdateGrievanceStatus,
+  handleGetGrievanceById
 } from './grievances.controller.js';
 import { authenticate, optionalAuthenticate, requireRole } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 
 const router = Router();
+
+const grvIdParamSchema = {
+  params: {
+    id: { required: true, type: 'string', minLength: 1, maxLength: 100 }
+  }
+};
 
 const submitGrievanceSchema = {
   body: {
@@ -39,7 +46,10 @@ router.get('/grievances/my', authenticate, handleGetMyGrievances);
 // 3. Official & Admin get all grievances queue
 router.get('/grievances', authenticate, requireRole(['official', 'admin']), handleListGrievances);
 
-// 4. Official & Admin update grievance status
+// 4. View grievance by ID or reference (Public tracking or citizen detail)
+router.get('/grievances/:id', optionalAuthenticate, validate(grvIdParamSchema), handleGetGrievanceById);
+
+// 5. Official & Admin update grievance status
 router.patch('/grievances/:id/status', authenticate, requireRole(['official', 'admin']), validate(updateGrievanceSchema), handleUpdateGrievanceStatus);
 
 export default router;

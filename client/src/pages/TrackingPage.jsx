@@ -19,19 +19,27 @@ import {
   Table as TableIcon,
   LayoutGrid,
   ChevronRight,
-  XCircle
+  XCircle,
+  Building2,
+  User,
+  Send,
+  ShieldCheck
 } from 'lucide-react';
 import { getAllDrafts, deleteDraft } from '../offline/draftStorage';
 import { getCatalogueSchemeById } from '../data/schemesCatalogue';
 import DraftFormModal from '../components/DraftFormModal';
 import ApplicationStatusLifecycle from '../components/ApplicationStatusLifecycle';
-import { getApiBaseUrl } from '../api/schemes';
+import { getApplicationByIdApi, getMyApplicationsApi } from '../api/applications';
+import { getGrievanceByIdApi, getMyGrievancesApi } from '../api/grievances';
+import { useAuth } from '../context/AuthContext';
 import { isOnline } from '../registerServiceWorker';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function TrackingPage() {
   const { isKannada, t } = useLanguage();
   const navigate = useNavigate();
+
+  const { currentUser, isAuthenticated } = useAuth();
 
   // Local drafts state
   const [drafts, setDrafts] = useState([]);
@@ -41,12 +49,17 @@ export default function TrackingPage() {
   const [activeDraftService, setActiveDraftService] = useState(null);
   const [expandedDraftId, setExpandedDraftId] = useState(null);
 
-  // Server-side official tracking state
+  // Authenticated citizen server applications & grievances
+  const [serverApps, setServerApps] = useState([]);
+  const [serverGrievances, setServerGrievances] = useState([]);
+  const [isLoadingServerData, setIsLoadingServerData] = useState(false);
+  const [serverTab, setServerTab] = useState('all'); // 'all' | 'schemes' | 'grievances'
+
+  // Server-side official tracking search state
   const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [searchRefNumber, setSearchRefNumber] = useState('');
   const [searchedRecord, setSearchedRecord] = useState(null);
-  const [searchFeedback, setSearchFeedback] = useState(null); // { type: 'not_found' | 'not_connected' | 'offline' | 'error', message: string }
-  const [serverTrackingStatus, setServerTrackingStatus] = useState('not_implemented'); // 'connected' | 'not_implemented' | 'offline'
+  const [searchFeedback, setSearchFeedback] = useState(null);
 
   const loadDrafts = async () => {
     setIsLoadingDrafts(true);
@@ -60,9 +73,33 @@ export default function TrackingPage() {
     }
   };
 
+  const loadServerData = async () => {
+    if (!isAuthenticated) return;
+    setIsLoadingServerData(true);
+    try {
+      const [appRes, grvRes] = await Promise.allSettled([
+        getMyApplicationsApi(),
+        getMyGrievancesApi()
+      ]);
+      if (appRes.status === 'fulfilled' && appRes.value?.success && Array.isArray(appRes.value.data)) {
+        setServerApps(appRes.value.data);
+      }
+      if (grvRes.status === 'fulfilled' && grvRes.value?.success && Array.isArray(grvRes.value.data)) {
+        setServerGrievances(grvRes.value.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load server applications or grievances:', err);
+    } finally {
+      setIsLoadingServerData(false);
+    }
+  };
+
   useEffect(() => {
     loadDrafts();
-  }, []);
+    if (isAuthenticated) {
+      loadServerData();
+    }
+  }, [isAuthenticated]);
 
   const handleDelete = async (draftId, draftTitle) => {
     const confirmMsg = isKannada
@@ -95,7 +132,7 @@ export default function TrackingPage() {
     }
   };
 
-  // Official Server Tracking Lookup
+  // Official Server Tracking Lookup (Supports both Schemes and Grievances)
   const handleServerSearch = async (e) => {
     e.preventDefault();
     const query = searchRefNumber.trim();
@@ -117,44 +154,33 @@ export default function TrackingPage() {
     setSearchedRecord(null);
 
     try {
-      const baseUrl = getApiBaseUrl();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-      const response = await fetch(`${baseUrl}/api/applications/${encodeURIComponent(query)}`, {
-        signal: controller.signal
-      }).catch(() => null);
-
-      clearTimeout(timeoutId);
-
-      if (!response || response.status === 404 || response.status === 501 || response.status === 503) {
-        // Honest explanation: backend route is not connected in this environment
-        setSearchFeedback({
-          type: 'not_connected',
-          message: isKannada
-            ? `ಅಧಿಕೃತ ಟ್ರ್ಯಾಕಿಂಗ್ ಎಂಜಿನ್ ಇನ್ನೂ ಸಕ್ರಿಯವಾಗಿಲ್ಲ. "${query}" ಸಂಖ್ಯೆಗೆ ಸಂಬಂಧಿಸಿದಂತೆ ಸರ್ವರ್ ಕನೆಕ್ಷನ್ ಲಭ್ಯವಿಲ್ಲ.`
-            : `Official Application Tracking API is not yet connected to a production database. No verified departmental record was found for reference "${query}".`
-        });
-      } else if (response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        if (payload.success && payload.data) {
-          setSearchedRecord(payload.data);
-        } else {
-          setSearchFeedback({
-            type: 'not_found',
-            message: `No application matching reference "${query}" exists on the official server.`
-          });
-        }
-      } else {
-        setSearchFeedback({
-          type: 'not_connected',
-          message: 'The official departmental submission and tracking server is not reachable from this client.'
-        });
+      // 1. Try application tracking
+      const appRes = await getApplicationByIdApi(query);
+      if (appRes.success && appRes.data) {
+        setSearchedRecord({ ...appRes.data, recordType: 'application' });
+        setIsSearchingServer(false);
+        return;
       }
+
+      // 2. Try grievance tracking
+      const grvRes = await getGrievanceByIdApi(query);
+      if (grvRes.success && grvRes.data) {
+        setSearchedRecord({ ...grvRes.data, recordType: 'grievance' });
+        setIsSearchingServer(false);
+        return;
+      }
+
+      // 3. Neither found
+      setSearchFeedback({
+        type: 'not_found',
+        message: isKannada
+          ? `ಉಲ್ಲೇಖ "${query}" ಹೊಂದಿರುವ ಯಾವುದೇ ಅರ್ಜಿ ಅಥವಾ ದೂರು ಅಧಿಕೃತ ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ಕಂಡುಬಂದಿಲ್ಲ.`
+          : `No verified application or grievance matching reference "${query}" was found in the official registry.`
+      });
     } catch (err) {
       setSearchFeedback({
-        type: 'not_connected',
-        message: 'Could not contact departmental tracking gateway: Server endpoint is not implemented in this deployment.'
+        type: 'error',
+        message: 'Network communication failure contacting the state tracking registry.'
       });
     } finally {
       setIsSearchingServer(false);
@@ -635,7 +661,7 @@ export default function TrackingPage() {
               <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text"
-                placeholder="Enter Official Reference Number (e.g. KAR-2026-00142 or JS/2026/8941)..."
+                placeholder="Enter Reference Number (e.g. APP-..., GRV-..., or UUID)..."
                 value={searchRefNumber}
                 onChange={(e) => setSearchRefNumber(e.target.value)}
                 style={{
@@ -688,83 +714,336 @@ export default function TrackingPage() {
           )}
         </div>
 
-        {/* Searched Record Display (If server returns confirmed application) */}
-        {searchedRecord ? (
-          <div className="card" style={{ padding: '24px', borderLeft: '4px solid #16a34a', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-              <div>
-                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--gov-blue-primary)', textTransform: 'uppercase' }}>
-                  {searchedRecord.department || 'Karnataka Government Department'}
-                </span>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--gov-blue-dark)', marginTop: '2px' }}>
-                  {searchedRecord.schemeTitle || searchedRecord.title}
-                </h3>
-              </div>
+        {/* Authenticated Citizen's Submitted Applications & Grievances (From PostgreSQL) */}
+        {isAuthenticated && (serverApps.length > 0 || serverGrievances.length > 0) && (
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#102F56', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={18} color="#16834A" />
+                <span>{isKannada ? 'ಸರ್ವರ್‌ಗೆ ಸಲ್ಲಿಕೆಯಾಗಿರುವ ನನ್ನ ಅಧಿಕೃತ ದಾಖಲೆಗಳು' : 'My Confirmed Government Submissions'} ({serverApps.length + serverGrievances.length})</span>
+              </h3>
 
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Official Ref: <strong style={{ color: 'var(--gov-blue-dark)' }}>{searchedRecord.referenceNumber}</strong>
+              {/* Submissions Filter Tabs */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setServerTab('all')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '999px',
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    border: serverTab === 'all' ? '1px solid var(--gov-blue-primary)' : '1px solid var(--border-light)',
+                    backgroundColor: serverTab === 'all' ? 'var(--gov-blue-primary)' : 'var(--bg-body)',
+                    color: serverTab === 'all' ? '#ffffff' : 'var(--text-dark)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  All ({serverApps.length + serverGrievances.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setServerTab('schemes')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '999px',
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    border: serverTab === 'schemes' ? '1px solid var(--gov-blue-primary)' : '1px solid var(--border-light)',
+                    backgroundColor: serverTab === 'schemes' ? 'var(--gov-blue-primary)' : 'var(--bg-body)',
+                    color: serverTab === 'schemes' ? '#ffffff' : 'var(--text-dark)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Schemes ({serverApps.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setServerTab('grievances')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '999px',
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    border: serverTab === 'grievances' ? '1px solid var(--gov-blue-primary)' : '1px solid var(--border-light)',
+                    backgroundColor: serverTab === 'grievances' ? 'var(--gov-blue-primary)' : 'var(--bg-body)',
+                    color: serverTab === 'grievances' ? '#ffffff' : 'var(--text-dark)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Grievances ({serverGrievances.length})
+                </button>
               </div>
             </div>
 
-            {/* Lifecycle representation of confirmed server status */}
-            <ApplicationStatusLifecycle
-              currentStatus={searchedRecord.status || 'submitted'}
-              referenceNumber={searchedRecord.referenceNumber}
-              timestamps={{
-                submittedAt: searchedRecord.submittedAt,
-                underReviewAt: searchedRecord.underReviewAt,
-                decisionAt: searchedRecord.decisionAt
-              }}
-              remarks={searchedRecord.remarks}
-              isLocalOnly={false}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
+              {/* 1. Schemes Applications */}
+              {(serverTab === 'all' || serverTab === 'schemes') && serverApps.map((app) => (
+                <div
+                  key={app.id}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '10px',
+                    border: '1px solid #E2E8F0',
+                    borderLeft: '4px solid #16834A',
+                    padding: '16px',
+                    boxShadow: '0 2px 6px rgba(16, 47, 86, 0.04)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#1556A0', textTransform: 'uppercase' }}>
+                      {app.scheme_department || 'Government Department'}
+                    </span>
+                    <span style={{
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: app.status === 'approved' ? '#DCFCE7' : app.status === 'rejected' ? '#FEE2E2' : '#EFF6FF',
+                      color: app.status === 'approved' ? '#166534' : app.status === 'rejected' ? '#991B1B' : '#1E40AF',
+                      textTransform: 'capitalize'
+                    }}>
+                      ● {app.status?.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <h4 style={{ fontSize: '1.02rem', fontWeight: 800, color: '#102F56', margin: '0 0 6px 0' }}>
+                    {app.scheme_title}
+                  </h4>
+
+                  <div style={{ fontSize: '0.78rem', color: '#64748B', marginBottom: '10px' }}>
+                    Reference ID: <code style={{ color: '#102F56', fontWeight: 700 }}>{app.id}</code>
+                  </div>
+
+                  <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Submitted: {formatTimestamp(app.created_at)}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchRefNumber(app.id);
+                        getApplicationByIdApi(app.id).then((res) => {
+                          if (res.success && res.data) setSearchedRecord({ ...res.data, recordType: 'application' });
+                        });
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#1556A0',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: '0.78rem'
+                      }}
+                    >
+                      View Live Timeline →
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* 2. Grievances */}
+              {(serverTab === 'all' || serverTab === 'grievances') && serverGrievances.map((grv) => (
+                <div
+                  key={grv.id}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '10px',
+                    border: '1px solid #E2E8F0',
+                    borderLeft: '4px solid #D99016',
+                    padding: '16px',
+                    boxShadow: '0 2px 6px rgba(16, 47, 86, 0.04)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#D99016', textTransform: 'uppercase' }}>
+                      Janaspandana Grievance · {grv.village_panchayat}
+                    </span>
+                    <span style={{
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: grv.status === 'resolved' ? '#DCFCE7' : grv.status === 'rejected' ? '#FEE2E2' : '#FEF3C7',
+                      color: grv.status === 'resolved' ? '#166534' : grv.status === 'rejected' ? '#991B1B' : '#92400E',
+                      textTransform: 'capitalize'
+                    }}>
+                      ● {grv.status?.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <h4 style={{ fontSize: '1.02rem', fontWeight: 800, color: '#102F56', margin: '0 0 6px 0' }}>
+                    {grv.category?.replace(/_/g, ' ')?.toUpperCase()}
+                  </h4>
+
+                  <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0 0 10px 0', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {grv.description}
+                  </p>
+
+                  <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Lodged: {formatTimestamp(grv.created_at)}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchRefNumber(grv.id);
+                        getGrievanceByIdApi(grv.id).then((res) => {
+                          if (res.success && res.data) setSearchedRecord({ ...res.data, recordType: 'grievance' });
+                        });
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#D99016',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: '0.78rem'
+                      }}
+                    >
+                      View Live Status →
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Searched Record Display (If server returns confirmed application or grievance) */}
+        {searchedRecord ? (
+          <div className="card" style={{
+            padding: '24px',
+            borderLeft: searchedRecord.recordType === 'grievance' ? '4px solid #D99016' : '4px solid #16834A',
+            marginBottom: '16px',
+            backgroundColor: '#FFFFFF'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <span style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 800,
+                  color: searchedRecord.recordType === 'grievance' ? '#D99016' : '#1556A0',
+                  textTransform: 'uppercase'
+                }}>
+                  {searchedRecord.recordType === 'grievance'
+                    ? `Janaspandana Grievance · ${searchedRecord.village_panchayat || 'Karnataka'}`
+                    : (searchedRecord.scheme_department || searchedRecord.department || 'Karnataka Government Department')}
+                </span>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#102F56', marginTop: '2px', marginBottom: '4px' }}>
+                  {searchedRecord.recordType === 'grievance'
+                    ? (searchedRecord.category ? searchedRecord.category.replace(/_/g, ' ').toUpperCase() : 'Civic Grievance')
+                    : (searchedRecord.scheme_title || searchedRecord.title)}
+                </h3>
+                {(searchedRecord.applicant_name || searchedRecord.complainant_name) && (
+                  <div style={{ fontSize: '0.84rem', color: '#64748B' }}>
+                    Citizen / Complainant: <strong>{searchedRecord.applicant_name || searchedRecord.complainant_name}</strong> {searchedRecord.village_panchayat ? `(${searchedRecord.village_panchayat})` : ''}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.8rem', color: '#64748B', marginBottom: '4px' }}>
+                  Reference ID: <code style={{ color: '#102F56', fontWeight: 700 }}>{searchedRecord.id}</code>
+                </div>
+                <span style={{
+                  fontSize: '0.76rem',
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  backgroundColor: ['approved', 'resolved'].includes(searchedRecord.status) ? '#DCFCE7' : searchedRecord.status === 'rejected' ? '#FEE2E2' : '#EFF6FF',
+                  color: ['approved', 'resolved'].includes(searchedRecord.status) ? '#166534' : searchedRecord.status === 'rejected' ? '#991B1B' : '#1E40AF',
+                  textTransform: 'uppercase'
+                }}>
+                  ● Status: {searchedRecord.status?.replace('_', ' ')}
+                </span>
+              </div>
+            </div>
+
+            {/* Grievance Description if Grievance */}
+            {searchedRecord.recordType === 'grievance' && searchedRecord.description && (
+              <div style={{ backgroundColor: '#F8FAFC', padding: '12px 16px', borderRadius: '6px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
+                <h5 style={{ fontSize: '0.82rem', fontWeight: 700, color: '#102F56', marginBottom: '4px' }}>Complaint Summary:</h5>
+                <p style={{ margin: 0, fontSize: '0.84rem', color: '#334155', lineHeight: 1.5 }}>{searchedRecord.description}</p>
+                {searchedRecord.contact_phone && (
+                  <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '6px' }}>
+                    Registered Contact Phone: <strong>{searchedRecord.contact_phone}</strong>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Status History Timeline */}
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
+              <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#102F56', marginBottom: '14px' }}>
+                Official Scrutiny Timeline & Departmental Remarks
+              </h4>
+
+              {Array.isArray(searchedRecord.status_history) && searchedRecord.status_history.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {searchedRecord.status_history.map((entry, idx) => (
+                    <div key={entry.id || idx} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        backgroundColor: ['approved', 'resolved'].includes(entry.status) ? '#16834A' : entry.status === 'rejected' ? '#DC2626' : '#1556A0',
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <CheckCircle2 size={16} />
+                      </div>
+                      <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '6px', border: '1px solid #E2E8F0', flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#102F56', textTransform: 'capitalize' }}>
+                            {entry.status?.replace('_', ' ')}
+                          </span>
+                          <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                            {formatTimestamp(entry.created_at)}
+                          </span>
+                        </div>
+                        <p style={{ margin: '0 0 4px 0', fontSize: '0.82rem', color: '#334155' }}>
+                          {entry.remarks || 'No remarks entered.'}
+                        </p>
+                        {entry.changed_by_name && (
+                          <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                            Officer: {entry.changed_by_name} ({entry.changed_by_role})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.82rem', color: '#64748B' }}>
+                  Record logged into authoritative state registry on {formatTimestamp(searchedRecord.created_at)}. Assigned to local revenue/civic scrutiny officer.
+                </div>
+              )}
+            </div>
           </div>
         ) : (
-          /* Honest "Not Connected Yet" explanation when no server query has been made or backend not yet implemented */
-          <div className="card" style={{ padding: '24px 20px', borderLeft: '4px solid var(--border-medium)', marginBottom: '16px' }}>
+          <div className="card" style={{ padding: '24px 20px', borderLeft: '4px solid #1556A0', marginBottom: '16px', backgroundColor: '#FFFFFF' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
               <div style={{
                 width: '44px',
                 height: '44px',
                 borderRadius: '50%',
-                backgroundColor: '#e0e7ff',
-                color: '#4338ca',
+                backgroundColor: '#EFF6FF',
+                color: '#1556A0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0
               }}>
-                <Shield size={22} />
+                <ShieldCheck size={22} />
               </div>
 
               <div style={{ flex: 1 }}>
-                <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--gov-blue-dark)', marginBottom: '4px' }}>
-                  Official Tracking Engine: Not Connected Yet
+                <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#102F56', marginBottom: '4px' }}>
+                  Live Sakala & Central Registry Tracking Gateway
                 </h4>
-                <p style={{ color: 'var(--text-subtle)', fontSize: '0.85rem', lineHeight: '1.5', marginBottom: '12px' }}>
-                  The backend server API for authoritative departmental queue tracking and officer scrutiny has not been connected to a production database yet. Once activated, verified departmental acknowledgments (e.g. <code>KAR-2026-XXXXX</code>) and real-time review status history will appear here.
+                <p style={{ color: '#475569', fontSize: '0.86rem', lineHeight: '1.5', margin: 0 }}>
+                  Enter your official application reference ID (UUID) or client submission ID above to inspect real-time status transitions, departmental remarks, and certificate sanction decisions directly from the PostgreSQL backend.
                 </p>
-
-                {/* Status Lifecycle Preview illustrating the architecture */}
-                <div style={{ marginTop: '12px' }}>
-                  <ApplicationStatusLifecycle
-                    currentStatus="draft"
-                    isLocalOnly={true}
-                    compact={true}
-                  />
-                </div>
-
-                <div style={{
-                  backgroundColor: 'var(--bg-body)',
-                  padding: '10px 14px',
-                  borderRadius: '4px',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-muted)',
-                  lineHeight: '1.5',
-                  marginTop: '12px'
-                }}>
-                  <strong>Architectural Rule:</strong> OfflineBridge strictly separates offline device drafts from verified server submissions. We do not display fabricated queue positions, fake approval statuses, or mocked application numbers.
-                </div>
               </div>
             </div>
           </div>

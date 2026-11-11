@@ -2,7 +2,8 @@ import {
   submitGrievance,
   getMyGrievances,
   listGrievances,
-  updateGrievanceStatus
+  updateGrievanceStatus,
+  getGrievanceById
 } from './grievances.service.js';
 
 export async function handleSubmitGrievance(req, res, next) {
@@ -66,6 +67,21 @@ export async function handleUpdateGrievanceStatus(req, res, next) {
     });
 
     res.status(200).json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleGetGrievanceById(req, res, next) {
+  try {
+    const grievance = await getGrievanceById(req.params.id, req.user);
+    if (!grievance) {
+      return res.status(404).json({
+        success: false,
+        error: { message: `Grievance with ID '${req.params.id}' was not found.`, code: 'NOT_FOUND' }
+      });
+    }
+    return res.status(200).json({ success: true, data: grievance });
   } catch (err) {
     next(err);
   }
