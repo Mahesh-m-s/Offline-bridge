@@ -40,7 +40,7 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 5000
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5173,http://localhost:80,http://localhost}
-      JWT_SECRET: ${JWT_SECRET:-offlinebridge_super_secure_jwt_secret_key_rural_services_2026}
+      JWT_SECRET: ${JWT_SECRET:-offlinebridge_prod_compose_jwt_secret_key_rural_services_karnataka_2026_dpi_secure}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-offlinebridge}}
       DB_HOST: postgres

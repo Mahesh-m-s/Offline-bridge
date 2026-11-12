@@ -1,11 +1,13 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
+import { getPool } from '../db/pool.js';
 
 /**
  * Authentication Middleware
- * Validates Bearer JWT from Authorization header and attaches req.user
+ * Validates Bearer JWT from Authorization header, verifies active user account status,
+ * and attaches verified req.user.
  */
-export function authenticate(req, res, next) {
+export async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
@@ -28,10 +30,9 @@ export function authenticate(req, res, next) {
     });
   }
 
+  let payload;
   try {
-    const payload = jwt.verify(token, env.jwt.secret);
-    req.user = payload;
-    next();
+    payload = jwt.verify(token, env.jwt.secret);
   } catch (err) {
     const isExpired = err.name === 'TokenExpiredError';
     return res.status(401).json({
@@ -42,13 +43,58 @@ export function authenticate(req, res, next) {
       }
     });
   }
+
+  // Active User Account Verification: verify user exists and is_active is true
+  try {
+    if (payload.id && env.isDbConfigured()) {
+      const pool = getPool();
+      const userRes = await pool.query(
+        'SELECT id, role, is_active FROM users WHERE id = $1 LIMIT 1',
+        [payload.id]
+      );
+
+      if (userRes.rows.length === 0) {
+        return res.status(401).json({
+          success: false,
+          error: {
+            message: 'User account not found or has been removed.',
+            code: 'ACCOUNT_NOT_FOUND'
+          }
+        });
+      }
+
+      const dbUser = userRes.rows[0];
+      if (dbUser.is_active === false) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            message: 'User account has been deactivated. Please contact platform administration.',
+            code: 'ACCOUNT_DEACTIVATED'
+          }
+        });
+      }
+
+      // Synchronize role with authoritative DB state
+      payload.role = dbUser.role;
+    }
+  } catch (dbErr) {
+    // If pool is unavailable or query fails, check if this is an explicit account error
+    if (dbErr.code === 'ACCOUNT_DEACTIVATED' || dbErr.code === 'ACCOUNT_NOT_FOUND') {
+      throw dbErr;
+    }
+    console.warn('[Auth Middleware] User active status lookup notice:', dbErr.message);
+  }
+
+  req.user = payload;
+  next();
 }
 
 /**
  * Optional Authentication Middleware
- * If token is provided and valid, attaches req.user; otherwise proceeds with req.user = null
+ * If token is provided and valid, verifies active account and attaches req.user;
+ * otherwise proceeds with req.user = null.
  */
-export function optionalAuthenticate(req, res, next) {
+export async function optionalAuthenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     req.user = null;
@@ -63,6 +109,21 @@ export function optionalAuthenticate(req, res, next) {
 
   try {
     const payload = jwt.verify(token, env.jwt.secret);
+
+    // Verify active account if DB is configured
+    if (payload.id && env.isDbConfigured()) {
+      const pool = getPool();
+      const userRes = await pool.query(
+        'SELECT id, role, is_active FROM users WHERE id = $1 LIMIT 1',
+        [payload.id]
+      );
+      if (userRes.rows.length === 0 || userRes.rows[0].is_active === false) {
+        req.user = null;
+        return next();
+      }
+      payload.role = userRes.rows[0].role;
+    }
+
     req.user = payload;
   } catch {
     req.user = null;

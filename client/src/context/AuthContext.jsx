@@ -131,11 +131,27 @@ export function AuthProvider({ children }) {
   }, []);
 
   /**
-   * Logout User and purge JWT token from sessionStorage
+   * Logout User and purge JWT token from sessionStorage.
+   * Clears user-specific client-side cached state without deleting pending offline submissions.
    */
   const logout = useCallback(() => {
     clearAuthToken();
     setCurrentUser(null);
+    try {
+      sessionStorage.clear();
+      // Purge any legacy or sensitive API caches in CacheStorage while preserving public catalogue
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        caches.keys().then((names) => {
+          for (const name of names) {
+            if (name.includes('api-cache') || name.includes('user-data')) {
+              caches.delete(name);
+            }
+          }
+        }).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Cache cleanup notice:', err);
+    }
   }, []);
 
   // Role login helpers with verified fallback credentials

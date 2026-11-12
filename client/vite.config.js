@@ -77,17 +77,31 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+            // Strictly whitelist approved public, read-only scheme catalogue endpoints.
+            // Exclude: /api/auth/*, /api/applications/*, /api/grievances/*, /api/sync/*, /api/audit/*, /api/users/*
+            urlPattern: ({ url, request }) => {
+              // Ensure only GET requests are ever cached (POST/PUT/PATCH/DELETE must NEVER be cached)
+              if (request.method !== 'GET') return false;
+
+              const pathname = url.pathname;
+              // Approved public read-only catalogue endpoints
+              const isPublicSchemeCatalogue =
+                pathname === '/api/schemes' ||
+                pathname.startsWith('/api/schemes/') ||
+                pathname === '/api/health';
+
+              return isPublicSchemeCatalogue;
+            },
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 5,
+              cacheName: 'public-scheme-catalogue-cache',
+              networkTimeoutSeconds: 4,
               expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 24 * 60 * 60 // 1 day
+                maxEntries: 50,
+                maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
               },
               cacheableResponse: {
-                statuses: [0, 200]
+                statuses: [200]
               }
             }
           }

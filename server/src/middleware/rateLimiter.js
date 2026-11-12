@@ -76,3 +76,10 @@ export const syncRateLimiter = createRateLimiter({
   message: 'Too many sync requests. Please throttle background synchronization.'
 });
 
+export const trackingRateLimiter = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  maxRequests: 30, // 30 status tracking queries per 5 minutes per client
+  message: 'Too many status tracking requests from this client. Please wait a moment before trying again.',
+  code: 'TRACKING_RATE_LIMIT_EXCEEDED'
+});
+

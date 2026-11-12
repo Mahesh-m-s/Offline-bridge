@@ -15,6 +15,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getAllChunks } from '../ingestion/documentRepository.js';
 import { embedText, isAiConfigured } from './aiProvider.js';
+import { BILINGUAL_CONCEPTS, textMatchesTerm } from './bilingualDetector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,7 +98,8 @@ export function saveEmbeddingsCache() {
 
 /**
  * Calculate lexical term overlap between query and chunk.
- * Supports both English and Kannada terms with acronym & entity matching.
+ * Supports English, Kannada script, and Kanglish transliterations
+ * with semantic concept mapping across welfare schemes and intents.
  * 
  * @param {string} query
  * @param {object} chunk
@@ -106,44 +108,39 @@ export function saveEmbeddingsCache() {
 export function calculateLexicalScore(query, chunk) {
   if (!query || !chunk || !chunk.content) return 0;
 
-  const queryTerms = (query.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
-    .filter((w) => w.length > 2);
-
-  if (queryTerms.length === 0) return 0;
-
+  const qLower = query.toLowerCase();
   const chunkText = `${chunk.documentTitle} ${chunk.department || ''} ${chunk.section || ''} ${chunk.content}`.toLowerCase();
 
-  let matched = 0;
-  for (const term of queryTerms) {
-    const stem = term.length > 4 ? term.replace(/s$/, '').replace(/ing$/, '').replace(/es$/, '') : term;
-    if (chunkText.includes(term) || chunkText.includes(stem)) {
-      matched++;
+  // 1. Direct word token matching
+  const queryTerms = (qLower.match(/[\p{L}\p{N}]+/gu) || [])
+    .filter((w) => w.length > 2);
+
+  let directMatched = 0;
+  if (queryTerms.length > 0) {
+    for (const term of queryTerms) {
+      const stem = term.length > 4 ? term.replace(/s$/, '').replace(/ing$/, '').replace(/es$/, '') : term;
+      if (textMatchesTerm(chunkText, term) || textMatchesTerm(chunkText, stem)) {
+        directMatched++;
+      }
     }
   }
 
-  const baseScore = matched / queryTerms.length;
+  const baseScore = queryTerms.length > 0 ? (directMatched / queryTerms.length) : 0;
 
-  // Key Karnataka scheme acronym & keyword boost
-  const keywords = [
-    'ssp', 'scholarship', 'ವಿದ್ಯಾರ್ಥಿವೇತನ',
-    'yuva', 'nidhi', 'ಯುವ ನಿಧಿ',
-    'raitha', 'siri', 'seed', 'ಬೀಜ', 'ರೈತ',
-    'sandhya', 'suraksha', 'pension', 'ಪಿಂಚಣಿ', 'ಹಿರಿಯ',
-    'gruha', 'lakshmi', 'ಗೃಹ ಲಕ್ಷ್ಮಿ',
-    'ration', 'ahara', 'bpl', 'ಪಡಿತರ', 'ಆಹಾರ',
-    'nadakacheri', 'caste', 'income', 'ಜಾತಿ', 'ಆದಾಯ',
-    'kaveri', 'encumbrance', 'ec', 'ಕಾವೇರಿ',
-    'basava', 'vasathi', 'housing', 'ವಸತಿ'
-  ];
-
-  let keywordBonus = 0;
-  for (const kw of keywords) {
-    if (query.toLowerCase().includes(kw) && chunkText.includes(kw)) {
-      keywordBonus += 0.25;
+  // 2. Cross-Lingual Concept Mapping Overlap
+  let conceptScore = 0;
+  for (const concept of BILINGUAL_CONCEPTS) {
+    const queryHasConcept = concept.terms.some((t) => textMatchesTerm(qLower, t));
+    if (queryHasConcept) {
+      const chunkHasConcept = concept.terms.some((t) => textMatchesTerm(chunkText, t));
+      if (chunkHasConcept) {
+        conceptScore += concept.isCoreScheme ? 0.60 : 0.25;
+      }
     }
   }
 
-  return Math.min(1.0, baseScore * 0.7 + keywordBonus);
+  // Combine direct word matching with bilingual concept bonus, capped at 1.0
+  return Math.min(1.0, (baseScore * 0.40) + conceptScore);
 }
 
 /**
@@ -179,12 +176,15 @@ export async function ensureChunkEmbeddings() {
 
 /**
  * Retrieve the most relevant knowledge chunks for a citizen's query.
+ * Supports cross-lingual semantic matching (English queries matching Kannada documents
+ * and Kannada queries matching English documents) with hybrid scoring.
  * 
  * @param {string} query - Citizen question
  * @param {object} [options]
  * @param {number} [options.topK=4] - Number of chunks to return
- * @param {number} [options.minSimilarity=0.35] - Minimum combined similarity threshold
- * @param {string} [options.language] - Filter by language ('en' | 'kn') if specified
+ * @param {number} [options.minSimilarity=0.25] - Minimum combined similarity threshold
+ * @param {string} [options.language] - Optional preferred language ('en' | 'kn')
+ * @param {boolean} [options.strictLanguage=false] - When true, strictly exclude documents in other languages
  * @returns {Promise<Array<object>>} Ranked relevant chunks
  */
 export async function retrieveRelevantChunks(query, options = {}) {
@@ -193,7 +193,8 @@ export async function retrieveRelevantChunks(query, options = {}) {
 
   const topK = options.topK || 4;
   const minSimilarity = options.minSimilarity !== undefined ? options.minSimilarity : 0.25;
-  const targetLanguage = options.language || null;
+  const preferredLanguage = options.language || null;
+  const strictLanguage = options.strictLanguage === true;
 
   // 1. Ensure chunk embeddings exist
   await ensureChunkEmbeddings();
@@ -207,8 +208,8 @@ export async function retrieveRelevantChunks(query, options = {}) {
   const scoredChunks = [];
 
   for (const chunk of chunks) {
-    // Optional language filtering
-    if (targetLanguage && chunk.language && chunk.language !== targetLanguage) {
+    // Only apply strict exclusion if caller explicitly enabled strictLanguage mode
+    if (strictLanguage && preferredLanguage && chunk.language && chunk.language !== preferredLanguage) {
       continue;
     }
 
@@ -216,8 +217,24 @@ export async function retrieveRelevantChunks(query, options = {}) {
     const vectorScore = chunkEmbedding ? Math.max(0, cosineSimilarity(queryEmbedding, chunkEmbedding)) : 0;
     const lexicalScore = calculateLexicalScore(sanitizedQuery, chunk);
 
-    // Hybrid score: 60% semantic vector, 40% lexical/keyword
-    const hybridScore = (vectorScore * 0.6) + (lexicalScore * 0.4);
+    // Hybrid score calculation:
+    // When both vector and lexical scores are present, blend 50/50.
+    // In cross-script matching where deterministic token vector is 0,
+    // derive score directly from the bilingual concept-lexical engine (85% scaling).
+    let hybridScore;
+    if (vectorScore > 0 && lexicalScore > 0) {
+      hybridScore = (vectorScore * 0.50) + (lexicalScore * 0.50);
+    } else if (lexicalScore > 0) {
+      hybridScore = lexicalScore * 0.85;
+    } else {
+      hybridScore = vectorScore * 0.55;
+    }
+
+    // Language preference: if chunk language matches preferred response language,
+    // apply a small 5% tie-breaker boost, but never drop the opposite language.
+    if (preferredLanguage && chunk.language === preferredLanguage) {
+      hybridScore = Math.min(1.0, hybridScore * 1.05);
+    }
 
     if (hybridScore >= minSimilarity) {
       scoredChunks.push({

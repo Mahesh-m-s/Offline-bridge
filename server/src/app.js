@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { env } from './config/env.js';
 import healthRouter from './routes/health.js';
 import schemesRouter from './modules/schemes/schemes.routes.js';
@@ -15,6 +16,25 @@ import { setupSwagger } from './config/swagger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
+
+// 0. HTTP Security Headers with Helmet
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        connectSrc: ["'self'", ...env.allowedOrigins, 'https://generativelanguage.googleapis.com'],
+        fontSrc: ["'self'", 'data:'],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: env.isProduction ? [] : null
+      }
+    },
+    crossOriginEmbedderPolicy: false
+  })
+);
 
 // 1. Configure CORS safely
 const corsOptions = {

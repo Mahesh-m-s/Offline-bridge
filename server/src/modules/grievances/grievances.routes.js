@@ -8,6 +8,7 @@ import {
 } from './grievances.controller.js';
 import { authenticate, optionalAuthenticate, requireRole } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
+import { trackingRateLimiter } from '../../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -47,7 +48,7 @@ router.get('/grievances/my', authenticate, handleGetMyGrievances);
 router.get('/grievances', authenticate, requireRole(['official', 'admin']), handleListGrievances);
 
 // 4. View grievance by ID or reference (Public tracking or citizen detail)
-router.get('/grievances/:id', optionalAuthenticate, validate(grvIdParamSchema), handleGetGrievanceById);
+router.get('/grievances/:id', trackingRateLimiter, optionalAuthenticate, validate(grvIdParamSchema), handleGetGrievanceById);
 
 // 5. Official & Admin update grievance status
 router.patch('/grievances/:id/status', authenticate, requireRole(['official', 'admin']), validate(updateGrievanceSchema), handleUpdateGrievanceStatus);

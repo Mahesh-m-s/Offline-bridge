@@ -15,11 +15,17 @@ import {
   User,
   ShieldCheck,
   Building2,
-  RefreshCw
+  RefreshCw,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/apiClient';
 import { isOnline, setupNetworkListeners } from '../registerServiceWorker';
+import { speechRecognition, isSpeechRecognitionSupported } from '../utils/speechRecognition';
+import { speechSynthesisManager, isSpeechSynthesisSupported } from '../utils/speechSynthesis';
 
 export default function ArivuNetChatbot() {
   const { isKannada, toggleLanguage, t } = useLanguage();
@@ -32,8 +38,140 @@ export default function ArivuNetChatbot() {
   const [activeError, setActiveError] = useState(null);
   const [conversationId, setConversationId] = useState(null);
 
+  // Bilingual Voice Assistant State
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechLang, setSpeechLang] = useState(isKannada ? 'kn-IN' : 'en-IN');
+  const [speechError, setSpeechError] = useState(null);
+  const [activePlayingId, setActivePlayingId] = useState(null);
+  const [voiceUnavailableNotice, setVoiceUnavailableNotice] = useState({});
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Sync speech language when UI language changes
+  useEffect(() => {
+    if (!isRecording) {
+      setSpeechLang(isKannada ? 'kn-IN' : 'en-IN');
+    }
+  }, [isKannada, isRecording]);
+
+  // Clean up voice sessions when chatbot window closes
+  useEffect(() => {
+    if (!isOpen) {
+      if (speechRecognition.getIsListening()) {
+        speechRecognition.stop();
+        setIsRecording(false);
+      }
+      speechSynthesisManager.stop();
+      setActivePlayingId(null);
+    }
+  }, [isOpen]);
+
+  // Clean up on component unmount
+  useEffect(() => {
+    return () => {
+      speechRecognition.stop();
+      speechSynthesisManager.stop();
+    };
+  }, []);
+
+  // Voice Handlers
+  const startRecording = async () => {
+    setSpeechError(null);
+    const started = await speechRecognition.start({
+      language: speechLang,
+      onStart: () => {
+        setIsRecording(true);
+      },
+      onResult: ({ transcript }) => {
+        setInputText(transcript);
+      },
+      onError: ({ message }) => {
+        setIsRecording(false);
+        setSpeechError(message);
+      },
+      onEnd: () => {
+        setIsRecording(false);
+      }
+    });
+
+    if (!started && !isSpeechRecognitionSupported()) {
+      setSpeechError(
+        isKannada
+          ? 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಲಭ್ಯವಿಲ್ಲ. ದಯವಿಟ್ಟು Chrome, Edge ಅಥವಾ Android ಬ್ರೌಸರ್ ಬಳಸಿ.'
+          : 'Speech recognition is not supported in this browser. Please use Chrome, Edge, or an Android browser.'
+      );
+    }
+  };
+
+  const stopRecording = () => {
+    speechRecognition.stop();
+    setIsRecording(false);
+  };
+
+  const toggleVoiceRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  const toggleSpeechLanguage = () => {
+    const nextLang = speechLang === 'kn-IN' ? 'en-IN' : 'kn-IN';
+    setSpeechLang(nextLang);
+    if (isRecording) {
+      stopRecording();
+      setTimeout(() => {
+        speechRecognition.start({
+          language: nextLang,
+          onStart: () => setIsRecording(true),
+          onResult: ({ transcript }) => setInputText(transcript),
+          onError: ({ message }) => {
+            setIsRecording(false);
+            setSpeechError(message);
+          },
+          onEnd: () => setIsRecording(false)
+        });
+      }, 200);
+    }
+  };
+
+  const handleToggleSpeak = (msg) => {
+    if (activePlayingId === msg.id) {
+      speechSynthesisManager.stop();
+      setActivePlayingId(null);
+      return;
+    }
+
+    // Determine message language: check msg.language or Kannada Unicode code points
+    const kannadaCharCount = (msg.text.match(/[\u0C80-\u0CFF]/g) || []).length;
+    const lang = msg.language === 'kn' || kannadaCharCount >= 4 ? 'kn' : 'en';
+
+    speechSynthesisManager.speak({
+      messageId: msg.id,
+      text: msg.text,
+      language: lang,
+      onStart: () => {
+        setActivePlayingId(msg.id);
+      },
+      onEnd: () => {
+        setActivePlayingId(null);
+      },
+      onError: () => {
+        setActivePlayingId(null);
+      },
+      onVoiceUnavailable: () => {
+        setActivePlayingId(null);
+        setVoiceUnavailableNotice((prev) => ({
+          ...prev,
+          [msg.id]: isKannada
+            ? 'ಈ ಸಾಧನದಲ್ಲಿ ಕನ್ನಡ ಧ್ವನಿ ಪ್ಯಾಕ್ ಸ್ಥಾಪಿಸಲಾಗಿಲ್ಲ. ಸಂಪೂರ್ಣ ವಿವರಗಳನ್ನು ಮೇಲಿನ ಪಠ್ಯದಲ್ಲಿ ಓದಬಹುದು.'
+            : 'Kannada voice is not installed on this device. The verified answer is displayed as text above.'
+        }));
+      }
+    });
+  };
 
   // Network monitoring
   useEffect(() => {
@@ -96,6 +234,13 @@ export default function ArivuNetChatbot() {
     const textToSend = (queryText || inputText).trim();
     if (!textToSend || isLoading) return;
 
+    // Stop active recording or audio speech when sending
+    if (isRecording) {
+      stopRecording();
+    }
+    speechSynthesisManager.stop();
+    setActivePlayingId(null);
+
     setActiveError(null);
     setInputText('');
 
@@ -115,7 +260,7 @@ export default function ArivuNetChatbot() {
     try {
       const response = await apiClient.post('/api/rag/chat', {
         question: textToSend,
-        language: isKannada ? 'kn' : 'en',
+        language: 'auto', // Allow backend to detect explicit directives, Kanglish, and scripts
         conversationId
       });
 
@@ -188,6 +333,12 @@ export default function ArivuNetChatbot() {
   };
 
   const handleClearChat = () => {
+    speechSynthesisManager.stop();
+    setActivePlayingId(null);
+    if (isRecording) {
+      stopRecording();
+    }
+    setVoiceUnavailableNotice({});
     setMessages([
       {
         id: 'welcome-reset',
@@ -474,6 +625,50 @@ export default function ArivuNetChatbot() {
                     >
                       {msg.text}
 
+                      {/* Speaker / Voice Playback Button for Assistant */}
+                      {!isUser && !msg.isError && (
+                        <div
+                          style={{
+                            marginTop: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap'
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSpeak(msg)}
+                            aria-label={activePlayingId === msg.id ? 'Stop listening' : 'Listen to answer'}
+                            title={activePlayingId === msg.id ? 'Stop audio' : (isKannada ? 'ಉತ್ತರವನ್ನು ಆಲಿಸಿ' : 'Listen to answer')}
+                            className={`ob-speaker-btn ${activePlayingId === msg.id ? 'ob-speaker-playing' : ''}`}
+                          >
+                            {activePlayingId === msg.id ? (
+                              <>
+                                <VolumeX size={13} color="#dc2626" />
+                                <span style={{ color: '#dc2626' }}>{isKannada ? 'ನಿಲ್ಲಿಸಿ' : 'Stop'}</span>
+                                <span className="ob-audio-wave">
+                                  <span className="bar bar1"></span>
+                                  <span className="bar bar2"></span>
+                                  <span className="bar bar3"></span>
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 size={13} color="#0284c7" />
+                                <span>{isKannada ? 'ಉತ್ತರವನ್ನು ಆಲಿಸಿ' : 'Listen to Answer'}</span>
+                              </>
+                            )}
+                          </button>
+
+                          {voiceUnavailableNotice[msg.id] && (
+                            <div className="ob-voice-notice">
+                              {voiceUnavailableNotice[msg.id]}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Source references block for Assistant */}
                       {!isUser && msg.sources && msg.sources.length > 0 && (
                         <div
@@ -645,6 +840,81 @@ export default function ArivuNetChatbot() {
             ))}
           </div>
 
+          {/* Active Voice Listening Banner */}
+          {isRecording && (
+            <div className="ob-listening-banner">
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span className="ob-recording-indicator"></span>
+                <span>
+                  {isKannada
+                    ? `ಆಲಿಸಲಾಗುತ್ತಿದೆ (${speechLang === 'kn-IN' ? 'ಕನ್ನಡ' : 'English'})... ಮಾತನಾಡಿ`
+                    : `Listening (${speechLang === 'kn-IN' ? 'Kannada' : 'English'})... Speak now`}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={toggleSpeechLanguage}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #f87171',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    fontSize: '0.68rem',
+                    color: '#991b1b',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                  title={speechLang === 'kn-IN' ? 'Switch to English voice input' : 'Switch to Kannada voice input'}
+                >
+                  {speechLang === 'kn-IN' ? 'Switch to English' : 'ಕನ್ನಡಕ್ಕೆ ಬದಲಿಸಿ'}
+                </button>
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  style={{
+                    background: '#ef4444',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    fontSize: '0.68rem',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    fontWeight: 700
+                  }}
+                >
+                  {isKannada ? 'ಮುಕ್ತಾಯ' : 'Done'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Voice Error Notice */}
+          {speechError && (
+            <div
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#fffbeb',
+                borderTop: '1px solid #fef3c7',
+                fontSize: '0.74rem',
+                color: '#b45309',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '6px'
+              }}
+            >
+              <span>{speechError}</span>
+              <button
+                type="button"
+                onClick={() => setSpeechError(null)}
+                style={{ background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', padding: 0 }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
           {/* Input Box Footer */}
           <div
             style={{
@@ -663,21 +933,42 @@ export default function ArivuNetChatbot() {
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
-                isKannada
-                  ? 'ಸರಕಾರಿ ಯೋಜನೆಗಳ ಬಗ್ಗೆ ಕೇಳಿ (ಉದಾ: SSP, ರೈತ ಸಿರಿ)...'
-                  : 'Ask about Karnataka schemes (e.g. SSP, Raitha Siri)...'
+                isRecording
+                  ? (isKannada ? 'ಧ್ವನಿ ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿದೆ...' : 'Recording speech...')
+                  : (isKannada ? 'ಸರಕಾರಿ ಯೋಜನೆಗಳ ಬಗ್ಗೆ ಕೇಳಿ (ಉದಾ: SSP, ರೈತ ಸಿರಿ)...' : 'Ask about Karnataka schemes (e.g. SSP, Raitha Siri)...')
               }
               disabled={isLoading}
               style={{
                 flex: 1,
                 padding: '9px 12px',
                 borderRadius: '8px',
-                border: '1px solid #cbd5e1',
+                border: isRecording ? '1px solid #ef4444' : '1px solid #cbd5e1',
                 fontSize: '0.85rem',
                 outline: 'none',
-                fontFamily: 'inherit'
+                fontFamily: 'inherit',
+                backgroundColor: isRecording ? '#fffafb' : '#ffffff'
               }}
             />
+
+            {/* Microphone Button */}
+            <button
+              type="button"
+              onClick={toggleVoiceRecording}
+              disabled={isLoading}
+              aria-label={isRecording ? 'Stop voice recording' : 'Start voice recording'}
+              title={
+                !isSpeechRecognitionSupported()
+                  ? (isKannada ? 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಲಭ್ಯವಿಲ್ಲ' : 'Speech recognition not supported in this browser')
+                  : isRecording
+                  ? (isKannada ? 'ರೆಕಾರ್ಡಿಂಗ್ ನಿಲ್ಲಿಸಿ' : 'Stop recording')
+                  : (isKannada ? `ಧ್ವನಿ ಇನ್‌ಪುಟ್ (${speechLang === 'kn-IN' ? 'ಕನ್ನಡ' : 'English'})` : `Voice Input (${speechLang === 'kn-IN' ? 'Kannada' : 'English'})`)
+              }
+              className={`ob-mic-btn ${isRecording ? 'ob-mic-recording' : ''}`}
+            >
+              {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
+
+            {/* Send Button */}
             <button
               type="button"
               onClick={() => handleSendMessage()}
@@ -694,7 +985,8 @@ export default function ArivuNetChatbot() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: inputText.trim() && !isLoading ? 'pointer' : 'not-allowed',
-                transition: 'background-color 0.2s ease'
+                transition: 'background-color 0.2s ease',
+                flexShrink: 0
               }}
             >
               <Send size={16} />

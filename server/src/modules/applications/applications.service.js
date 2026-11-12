@@ -219,26 +219,58 @@ export async function getApplicationById(applicationId, requestingUser = null) {
 
   if (!app) return null;
 
-  // Enforce ownership if authenticated as citizen: Citizen can ONLY view full form details of their own application
-  if (requestingUser && requestingUser.role === 'citizen' && String(app.user_id) !== String(requestingUser.id)) {
-    const err = new Error('Access forbidden. You do not have permission to view another citizen’s application.');
-    err.code = 'FORBIDDEN';
-    err.status = 403;
-    throw err;
+  // 1. Authenticated Access: Citizen, Official, Admin
+  if (requestingUser) {
+    // If citizen: strictly enforce ownership
+    if (requestingUser.role === 'citizen') {
+      if (String(app.user_id) !== String(requestingUser.id)) {
+        const err = new Error('Access forbidden. You do not have permission to view another citizen’s application.');
+        err.code = 'FORBIDDEN';
+        err.status = 403;
+        throw err;
+      }
+    }
+    // Officials and Admins have authorized access to view full application
+
+    // Fetch full status history for authenticated users
+    const historyQuery = `
+      SELECT h.id, h.status, h.remarks, h.created_at, u.full_name as changed_by_name, u.role as changed_by_role
+      FROM application_status_history h
+      LEFT JOIN users u ON h.changed_by = u.id
+      WHERE h.application_id = $1
+      ORDER BY h.created_at ASC
+    `;
+    const historyRes = await pool.query(historyQuery, [app.id]);
+    app.status_history = historyRes.rows;
+
+    return app;
   }
 
-  // Fetch status history
-  const historyQuery = `
-    SELECT h.id, h.status, h.remarks, h.created_at, u.full_name as changed_by_name, u.role as changed_by_role
-    FROM application_status_history h
-    LEFT JOIN users u ON h.changed_by = u.id
-    WHERE h.application_id = $1
-    ORDER BY h.created_at ASC
+  // 2. Unauthenticated Public Tracking: Zero PII, Only approved public fields
+  // Fetch sanitized public status history (no internal notes, officer names or roles)
+  const publicHistoryQuery = `
+    SELECT status, remarks, created_at
+    FROM application_status_history
+    WHERE application_id = $1
+    ORDER BY created_at ASC
   `;
-  const historyRes = await pool.query(historyQuery, [app.id]);
-  app.status_history = historyRes.rows;
+  const publicHistoryRes = await pool.query(publicHistoryQuery, [app.id]);
 
-  return app;
+  return {
+    id: app.id,
+    client_submission_id: app.client_submission_id,
+    status: app.status,
+    scheme_title: app.scheme_title,
+    scheme_department: app.scheme_department,
+    created_at: app.created_at,
+    updated_at: app.updated_at,
+    status_history: publicHistoryRes.rows.map((h) => ({
+      status: h.status,
+      remarks: h.remarks || 'Status update recorded in state registry.',
+      created_at: h.created_at
+    })),
+    isPublicTracking: true
+  };
 }
 
 /**

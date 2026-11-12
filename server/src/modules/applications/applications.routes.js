@@ -8,6 +8,7 @@ import {
 } from './applications.controller.js';
 import { authenticate, optionalAuthenticate, requireRole } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
+import { trackingRateLimiter } from '../../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -46,7 +47,7 @@ router.get('/applications/my', authenticate, handleGetMyApplications);
 router.get('/applications', authenticate, requireRole(['official', 'admin']), handleListApplications);
 
 // 4. View application by ID or reference (Public tracking or authenticated detail)
-router.get('/applications/:id', optionalAuthenticate, validate(appIdParamSchema), handleGetApplicationById);
+router.get('/applications/:id', trackingRateLimiter, optionalAuthenticate, validate(appIdParamSchema), handleGetApplicationById);
 
 // 5. Official & Admin update application status
 router.patch('/applications/:id/status', authenticate, requireRole(['official', 'admin']), validate(updateStatusSchema), handleUpdateStatus);

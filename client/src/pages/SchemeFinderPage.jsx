@@ -27,12 +27,18 @@ import {
   Send,
   RefreshCw,
   Building2,
-  ShieldCheck
+  ShieldCheck,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { SCHEMES_CATALOGUE, KARNATAKA_DISTRICTS } from '../data/schemesCatalogue';
 import DraftFormModal from '../components/DraftFormModal';
 import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/apiClient';
+import { speechRecognition, isSpeechRecognitionSupported } from '../utils/speechRecognition';
+import { speechSynthesisManager, isSpeechSynthesisSupported } from '../utils/speechSynthesis';
 
 export default function SchemeFinderPage() {
   const { isKannada, t } = useLanguage();
@@ -102,9 +108,128 @@ export default function SchemeFinderPage() {
   const [ragError, setRagError] = useState(null);
   const [ragConversationId, setRagConversationId] = useState(null);
 
+  // Bilingual Voice Assistant State for RAG
+  const [isRagRecording, setIsRagRecording] = useState(false);
+  const [ragSpeechLang, setRagSpeechLang] = useState(isKannada ? 'kn-IN' : 'en-IN');
+  const [ragSpeechError, setRagSpeechError] = useState(null);
+  const [activeRagPlayingId, setActiveRagPlayingId] = useState(null);
+  const [ragVoiceUnavailableNotice, setRagVoiceUnavailableNotice] = useState({});
+
+  // Sync speech language when UI language changes
+  useEffect(() => {
+    if (!isRagRecording) {
+      setRagSpeechLang(isKannada ? 'kn-IN' : 'en-IN');
+    }
+  }, [isKannada, isRagRecording]);
+
+  // Clean up voice sessions on unmount
+  useEffect(() => {
+    return () => {
+      speechRecognition.stop();
+      speechSynthesisManager.stop();
+    };
+  }, []);
+
+  // Voice Handlers for RAG
+  const startRagRecording = async () => {
+    setRagSpeechError(null);
+    const started = await speechRecognition.start({
+      language: ragSpeechLang,
+      onStart: () => setIsRagRecording(true),
+      onResult: ({ transcript }) => setRagQuery(transcript),
+      onError: ({ message }) => {
+        setIsRagRecording(false);
+        setRagSpeechError(message);
+      },
+      onEnd: () => setIsRagRecording(false)
+    });
+
+    if (!started && !isSpeechRecognitionSupported()) {
+      setRagSpeechError(
+        isKannada
+          ? 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಲಭ್ಯವಿಲ್ಲ. ದಯವಿಟ್ಟು Chrome, Edge ಅಥವಾ Android ಬ್ರೌಸರ್ ಬಳಸಿ.'
+          : 'Speech recognition is not supported in this browser. Please use Chrome, Edge, or an Android browser.'
+      );
+    }
+  };
+
+  const stopRagRecording = () => {
+    speechRecognition.stop();
+    setIsRagRecording(false);
+  };
+
+  const toggleRagRecording = () => {
+    if (isRagRecording) {
+      stopRagRecording();
+    } else {
+      startRagRecording();
+    }
+  };
+
+  const toggleRagSpeechLanguage = () => {
+    const nextLang = ragSpeechLang === 'kn-IN' ? 'en-IN' : 'kn-IN';
+    setRagSpeechLang(nextLang);
+    if (isRagRecording) {
+      stopRagRecording();
+      setTimeout(() => {
+        speechRecognition.start({
+          language: nextLang,
+          onStart: () => setIsRagRecording(true),
+          onResult: ({ transcript }) => setRagQuery(transcript),
+          onError: ({ message }) => {
+            setIsRagRecording(false);
+            setRagSpeechError(message);
+          },
+          onEnd: () => setIsRagRecording(false)
+        });
+      }, 200);
+    }
+  };
+
+  const handleToggleRagSpeak = (msg) => {
+    if (activeRagPlayingId === msg.id) {
+      speechSynthesisManager.stop();
+      setActiveRagPlayingId(null);
+      return;
+    }
+
+    const kannadaCharCount = (msg.text.match(/[\u0C80-\u0CFF]/g) || []).length;
+    const lang = msg.language === 'kn' || kannadaCharCount >= 4 ? 'kn' : 'en';
+
+    speechSynthesisManager.speak({
+      messageId: msg.id,
+      text: msg.text,
+      language: lang,
+      onStart: () => {
+        setActiveRagPlayingId(msg.id);
+      },
+      onEnd: () => {
+        setActiveRagPlayingId(null);
+      },
+      onError: () => {
+        setActiveRagPlayingId(null);
+      },
+      onVoiceUnavailable: () => {
+        setActiveRagPlayingId(null);
+        setRagVoiceUnavailableNotice((prev) => ({
+          ...prev,
+          [msg.id]: isKannada
+            ? 'ಈ ಸಾಧನದಲ್ಲಿ ಕನ್ನಡ ಧ್ವನಿ ಪ್ಯಾಕ್ ಸ್ಥಾಪಿಸಲಾಗಿಲ್ಲ. ಸಂಪೂರ್ಣ ವಿವರಗಳನ್ನು ಮೇಲಿನ ಪಠ್ಯದಲ್ಲಿ ಓದಬಹುದು.'
+            : 'Kannada voice is not installed on this device. The verified answer is displayed as text above.'
+        }));
+      }
+    });
+  };
+
   const handleAskRag = async (queryText = null) => {
     const textToSend = (queryText || ragQuery).trim();
     if (!textToSend || isRagLoading) return;
+
+    if (isRagRecording) {
+      stopRagRecording();
+    }
+    speechSynthesisManager.stop();
+    setActiveRagPlayingId(null);
 
     setRagError(null);
     setRagQuery('');
@@ -122,7 +247,7 @@ export default function SchemeFinderPage() {
     try {
       const res = await apiClient.post('/api/rag/chat', {
         question: textToSend,
-        language: isKannada ? 'kn' : 'en',
+        language: 'auto',
         conversationId: ragConversationId
       });
 
@@ -136,6 +261,7 @@ export default function SchemeFinderPage() {
             text: res.data.answer,
             sources: res.data.sources || [],
             confidence: res.data.confidence || 'high',
+            language: res.data.language,
             timestamp: new Date()
           }
         ]);
@@ -1511,33 +1637,135 @@ export default function SchemeFinderPage() {
             </div>
           </div>
 
+          {/* Active Voice Listening Banner */}
+          {isRagRecording && (
+            <div className="ob-listening-banner" style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span className="ob-recording-indicator"></span>
+                <span>
+                  {isKannada
+                    ? `ಆಲಿಸಲಾಗುತ್ತಿದೆ (${ragSpeechLang === 'kn-IN' ? 'ಕನ್ನಡ' : 'English'})... ಮಾತನಾಡಿ`
+                    : `Listening (${ragSpeechLang === 'kn-IN' ? 'Kannada' : 'English'})... Speak now`}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={toggleRagSpeechLanguage}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #f87171',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    fontSize: '0.68rem',
+                    color: '#991b1b',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                  title={ragSpeechLang === 'kn-IN' ? 'Switch to English voice input' : 'Switch to Kannada voice input'}
+                >
+                  {ragSpeechLang === 'kn-IN' ? 'Switch to English' : 'ಕನ್ನಡಕ್ಕೆ ಬದಲಿಸಿ'}
+                </button>
+                <button
+                  type="button"
+                  onClick={stopRagRecording}
+                  style={{
+                    background: '#ef4444',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    fontSize: '0.68rem',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    fontWeight: 700
+                  }}
+                >
+                  {isKannada ? 'ಮುಕ್ತಾಯ' : 'Done'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Voice Error Notice */}
+          {ragSpeechError && (
+            <div
+              style={{
+                marginBottom: '12px',
+                padding: '8px 14px',
+                backgroundColor: '#fffbeb',
+                borderRadius: '8px',
+                border: '1px solid #fef3c7',
+                fontSize: '0.78rem',
+                color: '#b45309',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px'
+              }}
+            >
+              <span>{ragSpeechError}</span>
+              <button
+                type="button"
+                onClick={() => setRagSpeechError(null)}
+                style={{ background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', padding: 0 }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Query Input Box */}
           <form
             onSubmit={(e) => { e.preventDefault(); handleAskRag(); }}
-            style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}
+            style={{ display: 'flex', gap: '10px', marginBottom: '24px', alignItems: 'center' }}
           >
             <input
               type="text"
               value={ragQuery}
               onChange={(e) => setRagQuery(e.target.value)}
-              placeholder={isKannada
-                ? 'ನಿಮ್ಮ ವಯಸ್ಸು, ಕೃಷಿ ಭೂಮಿ, ಆದಾಯ ಅಥವಾ ಅಗತ್ಯವಿರುವ ಯೋಜನೆಯನ್ನು ನಮೂದಿಸಿ...'
-                : 'Describe your situation (e.g. "I am a 66-year-old widow with no family income in Mandya")...'}
+              placeholder={
+                isRagRecording
+                  ? (isKannada ? 'ಧ್ವನಿ ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿದೆ... ಮಾತನಾಡಿ' : 'Recording speech... speak your question')
+                  : (isKannada
+                    ? 'ನಿಮ್ಮ ವಯಸ್ಸು, ಕೃಷಿ ಭೂಮಿ, ಆದಾಯ ಅಥವಾ ಅಗತ್ಯವಿರುವ ಯೋಜನೆಯನ್ನು ನಮೂದಿಸಿ...'
+                    : 'Describe your situation (e.g. "I am a 66-year-old widow with no family income in Mandya")...')
+              }
               style={{
                 flex: 1,
                 padding: '12px 16px',
                 borderRadius: '8px',
-                border: '1px solid #cbd5e1',
+                border: isRagRecording ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                backgroundColor: isRagRecording ? '#fffafb' : '#ffffff',
                 fontSize: '0.92rem',
                 fontFamily: 'inherit',
                 outline: 'none'
               }}
             />
+
+            {/* Microphone Button */}
+            <button
+              type="button"
+              onClick={toggleRagRecording}
+              disabled={isRagLoading}
+              aria-label={isRagRecording ? 'Stop voice recording' : 'Start voice recording'}
+              title={
+                !isSpeechRecognitionSupported()
+                  ? (isKannada ? 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಲಭ್ಯವಿಲ್ಲ' : 'Speech recognition not supported in this browser')
+                  : isRagRecording
+                  ? (isKannada ? 'ರೆಕಾರ್ಡಿಂಗ್ ನಿಲ್ಲಿಸಿ' : 'Stop recording')
+                  : (isKannada ? `ಧ್ವನಿ ಇನ್‌ಪುಟ್ (${ragSpeechLang === 'kn-IN' ? 'ಕನ್ನಡ' : 'English'})` : `Voice Input (${ragSpeechLang === 'kn-IN' ? 'Kannada' : 'English'})`)
+              }
+              className={`ob-mic-btn ${isRagRecording ? 'ob-mic-recording' : ''}`}
+              style={{ height: '46px', width: '46px', flexShrink: 0 }}
+            >
+              {isRagRecording ? <MicOff size={20} /> : <Mic size={20} />}
+            </button>
+
             <button
               type="submit"
               disabled={isRagLoading || !ragQuery.trim()}
               className="btn btn-primary"
-              style={{ padding: '0 24px', fontSize: '0.9rem' }}
+              style={{ height: '46px', padding: '0 24px', fontSize: '0.9rem', flexShrink: 0 }}
             >
               {isRagLoading ? (
                 <>
@@ -1648,10 +1876,54 @@ export default function SchemeFinderPage() {
                       lineHeight: 1.6,
                       color: msg.isError ? '#991b1b' : '#1e293b',
                       whiteSpace: 'pre-wrap',
-                      marginBottom: msg.sources?.length > 0 ? '14px' : '0'
+                      marginBottom: '8px'
                     }}>
                       {msg.text}
                     </div>
+
+                    {/* Speaker / Voice Playback Button for Assistant */}
+                    {!msg.isError && (
+                      <div
+                        style={{
+                          marginBottom: msg.sources?.length > 0 ? '12px' : '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          flexWrap: 'wrap'
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleToggleRagSpeak(msg)}
+                          aria-label={activeRagPlayingId === msg.id ? 'Stop listening' : 'Listen to answer'}
+                          title={activeRagPlayingId === msg.id ? 'Stop audio' : (isKannada ? 'ಉತ್ತರವನ್ನು ಆಲಿಸಿ' : 'Listen to answer')}
+                          className={`ob-speaker-btn ${activeRagPlayingId === msg.id ? 'ob-speaker-playing' : ''}`}
+                        >
+                          {activeRagPlayingId === msg.id ? (
+                            <>
+                              <VolumeX size={13} color="#dc2626" />
+                              <span style={{ color: '#dc2626' }}>{isKannada ? 'ನಿಲ್ಲಿಸಿ' : 'Stop'}</span>
+                              <span className="ob-audio-wave">
+                                <span className="bar bar1"></span>
+                                <span className="bar bar2"></span>
+                                <span className="bar bar3"></span>
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 size={13} color="#0284c7" />
+                              <span>{isKannada ? 'ಉತ್ತರವನ್ನು ಆಲಿಸಿ' : 'Listen to Answer'}</span>
+                            </>
+                          )}
+                        </button>
+
+                        {ragVoiceUnavailableNotice[msg.id] && (
+                          <div className="ob-voice-notice">
+                            {ragVoiceUnavailableNotice[msg.id]}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Source Citations */}
                     {msg.sources && msg.sources.length > 0 && (

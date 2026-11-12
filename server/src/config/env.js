@@ -30,11 +30,66 @@ function resolveSslConfig() {
   return false;
 }
 
+export const DEV_FALLBACK_JWT_SECRET = 'arivunet_dev_jwt_secret_minimum_32_characters_secure';
+
+const KNOWN_DEV_SECRETS = [
+  DEV_FALLBACK_JWT_SECRET,
+  'your_jwt_secret_minimum_32_characters_here'
+];
+
+/**
+ * Resolves and validates JWT secret for production security:
+ * - Production: refuses to start if missing, matches dev fallback, or is < 32 characters.
+ * - Development: allows safe local development fallback without logging secrets.
+ */
+export function resolveJwtSecret(nodeEnv = process.env.NODE_ENV, customSecret = process.env.JWT_SECRET) {
+  const isProd = nodeEnv === 'production';
+  const secret = customSecret;
+
+  if (isProd) {
+    if (!secret || typeof secret !== 'string' || secret.trim() === '') {
+      throw new Error(
+        '[FATAL CONFIG ERROR] JWT_SECRET is required in production environment. Refusing to start server with missing secret.'
+      );
+    }
+
+    if (KNOWN_DEV_SECRETS.includes(secret.trim())) {
+      throw new Error(
+        '[FATAL CONFIG ERROR] Known development fallback JWT_SECRET cannot be used in production. Refusing to start server.'
+      );
+    }
+
+    if (secret.trim().length < 32) {
+      throw new Error(
+        `[FATAL CONFIG ERROR] JWT_SECRET must be at least 32 characters in production (received ${secret.trim().length} characters).`
+      );
+    }
+
+    return secret.trim();
+  }
+
+  // Development / Test environment fallback
+  return (secret && secret.trim()) || DEV_FALLBACK_JWT_SECRET;
+}
+
+/**
+ * Resolves Swagger UI activation policy:
+ * - Production: disabled by default, enabled only if SWAGGER_ENABLED === 'true'
+ * - Development: enabled by default, disabled only if SWAGGER_ENABLED === 'false'
+ */
+export function resolveSwaggerEnabled(nodeEnv = process.env.NODE_ENV, swaggerEnv = process.env.SWAGGER_ENABLED) {
+  const isProd = nodeEnv === 'production';
+  if (isProd) {
+    return swaggerEnv === 'true';
+  }
+  return swaggerEnv !== 'false';
+}
+
 export const env = {
   port: parseInt(process.env.PORT, 10) || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
-  swaggerEnabled: process.env.SWAGGER_ENABLED !== 'false',
+  swaggerEnabled: resolveSwaggerEnabled(process.env.NODE_ENV, process.env.SWAGGER_ENABLED),
   
   // CORS configuration
   allowedOrigins: (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
@@ -44,7 +99,7 @@ export const env = {
 
   // JWT configuration
   jwt: {
-    secret: process.env.JWT_SECRET || 'arivunet_dev_jwt_secret_minimum_32_characters_secure',
+    secret: resolveJwtSecret(process.env.NODE_ENV, process.env.JWT_SECRET),
     expiresIn: process.env.JWT_EXPIRES_IN || '24h'
   },
 

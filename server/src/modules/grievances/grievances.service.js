@@ -172,13 +172,34 @@ export async function getGrievanceById(grievanceId, requestingUser = null) {
   const grv = result.rows[0];
   if (!grv) return null;
 
-  if (requestingUser && requestingUser.role === 'citizen' && grv.user_id && String(grv.user_id) !== String(requestingUser.id)) {
-    const err = new Error('Access forbidden. You do not have permission to view another citizen’s grievance.');
-    err.code = 'FORBIDDEN';
-    err.status = 403;
-    throw err;
+  // 1. Authenticated Access: Citizen, Official, Admin
+  if (requestingUser) {
+    if (requestingUser.role === 'citizen' && grv.user_id && String(grv.user_id) !== String(requestingUser.id)) {
+      const err = new Error('Access forbidden. You do not have permission to view another citizen’s grievance.');
+      err.code = 'FORBIDDEN';
+      err.status = 403;
+      throw err;
+    }
+    // Officials and Admins have authorized access to view full grievance
+    return grv;
   }
 
-  return grv;
+  // 2. Unauthenticated Public Tracking: Zero PII, Only approved progress info
+  return {
+    id: grv.id,
+    client_submission_id: grv.client_submission_id,
+    status: grv.status,
+    category: grv.category,
+    created_at: grv.created_at,
+    updated_at: grv.updated_at,
+    status_history: [
+      {
+        status: grv.status,
+        remarks: 'Public grievance progress recorded in Janaspandana registry.',
+        created_at: grv.updated_at || grv.created_at
+      }
+    ],
+    isPublicTracking: true
+  };
 }
 

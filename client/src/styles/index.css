@@ -4065,3 +4065,147 @@ body.dark-mode .ob-pane-heading {
   color: #ffffff;
   transform: translateY(-1px);
 }
+
+/* ==========================================================================
+   OFFLINEBRIDGE BILINGUAL VOICE ASSISTANT STYLES
+   ========================================================================== */
+
+/* Microphone Button */
+.ob-mic-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background-color: #f8fafc;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ob-mic-btn:hover:not(:disabled) {
+  background-color: #e2e8f0;
+  border-color: #94a3b8;
+  color: #0284c7;
+}
+
+.ob-mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ob-mic-recording {
+  background-color: #fef2f2 !important;
+  border-color: #ef4444 !important;
+  color: #dc2626 !important;
+  animation: ob-pulse-ring 1.5s infinite;
+}
+
+@keyframes ob-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* Listening Status Banner */
+.ob-listening-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background-color: #fef2f2;
+  border-top: 1px solid #fecaca;
+  font-size: 0.76rem;
+  color: #991b1b;
+  font-weight: 600;
+  animation: fadeIn 0.2s ease;
+}
+
+.ob-recording-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  margin-right: 6px;
+  animation: ob-blink 1s infinite alternate;
+}
+
+@keyframes ob-blink {
+  from { opacity: 0.3; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1.15); }
+}
+
+/* Speaker Button inside Response Bubbles */
+.ob-speaker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #0284c7;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ob-speaker-btn:hover {
+  background-color: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+
+.ob-speaker-playing {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+/* Animated Soundwave bars */
+.ob-audio-wave {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+  margin-left: 3px;
+}
+
+.ob-audio-wave .bar {
+  width: 2px;
+  background-color: currentColor;
+  border-radius: 1px;
+  animation: ob-wave-bar 0.8s ease-in-out infinite alternate;
+}
+
+.ob-audio-wave .bar1 { height: 4px; animation-delay: 0s; }
+.ob-audio-wave .bar2 { height: 10px; animation-delay: 0.2s; }
+.ob-audio-wave .bar3 { height: 6px; animation-delay: 0.4s; }
+
+@keyframes ob-wave-bar {
+  0% { height: 3px; }
+  100% { height: 11px; }
+}
+
+/* Voice Notice Banner */
+.ob-voice-notice {
+  margin-top: 6px;
+  padding: 5px 8px;
+  background-color: #fffbeb;
+  border: 1px solid #fef3c7;
+  border-radius: 6px;
+  font-size: 0.70rem;
+  color: #92400e;
+  line-height: 1.35;
+}
