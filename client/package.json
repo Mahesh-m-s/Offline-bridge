@@ -7,10 +7,11 @@
     "dev": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/vite/bin/vite.js build",
     "preview": "node ./node_modules/vite/bin/vite.js preview",
-    "test": "node test-step1-repairs.js && node test-client-api.js && node test-phase2b-voice.js",
+    "test": "node test-step1-repairs.js && node test-client-api.js && node test-phase2b-voice.js && node test-phase2d-continuous-voice.js",
     "test:frontend": "node test-step1-repairs.js",
     "test:api": "node test-client-api.js",
-    "test:voice": "node test-phase2b-voice.js"
+    "test:voice": "node test-phase2b-voice.js",
+    "test:continuous": "node test-phase2d-continuous-voice.js"
   },
   "dependencies": {
     "lucide-react": "^0.441.0",

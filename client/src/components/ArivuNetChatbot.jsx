@@ -19,7 +19,8 @@ import {
   Mic,
   MicOff,
   Volume2,
-  VolumeX
+  VolumeX,
+  Square
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/apiClient';
@@ -42,25 +43,43 @@ export default function ArivuNetChatbot() {
   const [isRecording, setIsRecording] = useState(false);
   const [speechLang, setSpeechLang] = useState(isKannada ? 'kn-IN' : 'en-IN');
   const [speechError, setSpeechError] = useState(null);
+  const [interimText, setInterimText] = useState('');
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const [activePlayingId, setActivePlayingId] = useState(null);
   const [voiceUnavailableNotice, setVoiceUnavailableNotice] = useState({});
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Sync speech language when UI language changes
+  // Sync speech language when UI language changes (only if not actively recording)
   useEffect(() => {
     if (!isRecording) {
       setSpeechLang(isKannada ? 'kn-IN' : 'en-IN');
     }
   }, [isKannada, isRecording]);
 
+  // Recording duration timer
+  useEffect(() => {
+    let timer = null;
+    if (isRecording) {
+      timer = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setRecordingDuration(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isRecording]);
+
   // Clean up voice sessions when chatbot window closes
   useEffect(() => {
     if (!isOpen) {
-      if (speechRecognition.getIsListening()) {
+      if (speechRecognition.getIsListening() || speechRecognition.getDesiredListening()) {
         speechRecognition.stop();
         setIsRecording(false);
+        setInterimText('');
       }
       speechSynthesisManager.stop();
       setActivePlayingId(null);
@@ -70,28 +89,46 @@ export default function ArivuNetChatbot() {
   // Clean up on component unmount
   useEffect(() => {
     return () => {
-      speechRecognition.stop();
+      speechRecognition.destroy();
       speechSynthesisManager.stop();
     };
   }, []);
 
+  const formatDuration = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   // Voice Handlers
   const startRecording = async () => {
     setSpeechError(null);
+    setInterimText('');
+    setRecordingDuration(0);
+
     const started = await speechRecognition.start({
       language: speechLang,
+      initialText: inputText,
       onStart: () => {
         setIsRecording(true);
       },
-      onResult: ({ transcript }) => {
-        setInputText(transcript);
+      onResult: ({ transcript, accumulatedFinal, interim }) => {
+        setInputText(accumulatedFinal || transcript);
+        setInterimText(interim || '');
       },
-      onError: ({ message }) => {
-        setIsRecording(false);
+      onError: ({ message, fatal }) => {
+        if (fatal) {
+          setIsRecording(false);
+          setInterimText('');
+        }
         setSpeechError(message);
       },
       onEnd: () => {
         setIsRecording(false);
+        setInterimText('');
+      },
+      onRestart: ({ attempt, language }) => {
+        // Recognition reconnected automatically in background
       }
     });
 
@@ -107,6 +144,7 @@ export default function ArivuNetChatbot() {
   const stopRecording = () => {
     speechRecognition.stop();
     setIsRecording(false);
+    setInterimText('');
   };
 
   const toggleVoiceRecording = () => {
@@ -117,23 +155,11 @@ export default function ArivuNetChatbot() {
     }
   };
 
-  const toggleSpeechLanguage = () => {
-    const nextLang = speechLang === 'kn-IN' ? 'en-IN' : 'kn-IN';
+  const toggleSpeechLanguage = (targetLang = null) => {
+    const nextLang = targetLang || (speechLang === 'kn-IN' ? 'en-IN' : 'kn-IN');
     setSpeechLang(nextLang);
     if (isRecording) {
-      stopRecording();
-      setTimeout(() => {
-        speechRecognition.start({
-          language: nextLang,
-          onStart: () => setIsRecording(true),
-          onResult: ({ transcript }) => setInputText(transcript),
-          onError: ({ message }) => {
-            setIsRecording(false);
-            setSpeechError(message);
-          },
-          onEnd: () => setIsRecording(false)
-        });
-      }, 200);
+      speechRecognition.switchLanguage(nextLang);
     }
   };
 
@@ -231,18 +257,21 @@ export default function ArivuNetChatbot() {
       ];
 
   const handleSendMessage = async (queryText = null) => {
-    const textToSend = (queryText || inputText).trim();
-    if (!textToSend || isLoading) return;
-
-    // Stop active recording or audio speech when sending
+    // Stop active recording and commit transcript when sending
     if (isRecording) {
       stopRecording();
     }
     speechSynthesisManager.stop();
     setActivePlayingId(null);
 
+    const committedText = speechRecognition.getFullTranscript() || inputText;
+    const textToSend = (queryText || committedText).trim();
+    if (!textToSend || isLoading) return;
+
     setActiveError(null);
     setInputText('');
+    setInterimText('');
+    speechRecognition.setAccumulatedTranscript('');
 
     const userMessageId = `msg-${Date.now()}`;
     const newMessages = [
@@ -517,7 +546,12 @@ export default function ArivuNetChatbot() {
               {/* Close Window */}
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  if (isRecording) stopRecording();
+                  speechSynthesisManager.stop();
+                  setActivePlayingId(null);
+                  setIsOpen(false);
+                }}
                 aria-label="Close chat"
                 style={{
                   background: 'none',
@@ -915,6 +949,96 @@ export default function ArivuNetChatbot() {
             </div>
           )}
 
+          {/* Active Continuous Recording Status Bar */}
+          {isRecording && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="ob-listening-banner"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '7px 12px',
+                backgroundColor: '#fef2f2',
+                borderTop: '1px solid #fecaca',
+                fontSize: '0.78rem',
+                color: '#991b1b'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="ob-recording-indicator" />
+                <span style={{ fontWeight: 600 }}>
+                  {isKannada ? 'ಆಲಿಸಲಾಗುತ್ತಿದೆ...' : 'Listening...'}
+                </span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#dc2626' }}>
+                  {formatDuration(recordingDuration)}
+                </span>
+                {/* Language Switcher Badge */}
+                <button
+                  type="button"
+                  onClick={() => toggleSpeechLanguage()}
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    border: '1px solid #f87171',
+                    backgroundColor: '#ffffff',
+                    color: '#b91c1c',
+                    cursor: 'pointer',
+                    fontSize: '0.72rem',
+                    fontWeight: 600
+                  }}
+                  title={isKannada ? 'ಧ್ವನಿ ಭಾಷೆ ಬದಲಾಯಿಸಿ' : 'Switch speech language'}
+                >
+                  {speechLang === 'kn-IN' ? 'ಕನ್ನಡ (kn-IN)' : 'English (en-IN)'} ⇄
+                </button>
+              </div>
+
+              {/* Stop Recording Button */}
+              <button
+                type="button"
+                onClick={stopRecording}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '3px 9px',
+                  borderRadius: '6px',
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                aria-label="Stop recording"
+              >
+                <Square size={12} fill="#ffffff" />
+                <span>{isKannada ? 'ಮುಕ್ತಾಯ' : 'Done'}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Live Interim Transcript Preview */}
+          {interimText && (
+            <div
+              aria-live="polite"
+              style={{
+                padding: '4px 14px',
+                backgroundColor: '#f0f9ff',
+                borderTop: '1px dashed #bae6fd',
+                fontSize: '0.78rem',
+                color: '#0284c7',
+                fontStyle: 'italic',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              🎤 {interimText}
+            </div>
+          )}
+
           {/* Input Box Footer */}
           <div
             style={{
@@ -930,11 +1054,21 @@ export default function ArivuNetChatbot() {
               ref={inputRef}
               type="text"
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                speechRecognition.setAccumulatedTranscript(e.target.value);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && isRecording) {
+                  e.preventDefault();
+                  stopRecording();
+                  return;
+                }
+                handleKeyDown(e);
+              }}
               placeholder={
                 isRecording
-                  ? (isKannada ? 'ಧ್ವನಿ ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿದೆ...' : 'Recording speech...')
+                  ? (isKannada ? 'ಧ್ವನಿ ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿದೆ... ಮಾತನಾಡಿ ಅಥವಾ ಟೈಪ್ ಮಾಡಿ' : 'Recording speech... speak or type')
                   : (isKannada ? 'ಸರಕಾರಿ ಯೋಜನೆಗಳ ಬಗ್ಗೆ ಕೇಳಿ (ಉದಾ: SSP, ರೈತ ಸಿರಿ)...' : 'Ask about Karnataka schemes (e.g. SSP, Raitha Siri)...')
               }
               disabled={isLoading}

@@ -157,6 +157,11 @@ export function translateSpeechError(errCode, isKannada = false, context = {}) {
         ? 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಲಭ್ಯವಿಲ್ಲ. ದಯವಿಟ್ಟು Google Chrome, Microsoft Edge ಅಥವಾ Android ಬ್ರೌಸರ್ ಬಳಸಿ.'
         : 'Speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or an Android browser.';
 
+    case 'language-not-supported':
+      return isKannada
+        ? 'ಆಯ್ಕೆ ಮಾಡಿದ ಭಾಷೆ (ಕನ್ನಡ/English) ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಲಭ್ಯವಿಲ್ಲ. ದಯವಿಟ್ಟು Google Chrome ಅಥವಾ Edge ಬಳಸಿ.'
+        : 'The selected speech language is not supported by this browser engine. Please use Google Chrome or Edge.';
+
     case 'INSECURE_CONTEXT':
       return isKannada
         ? 'ಮೈಕ್ರೊಫೋನ್ ಪ್ರವೇಶಕ್ಕೆ HTTPS ಅಥವಾ localhost ಅಗತ್ಯವಿದೆ. ದಯವಿಟ್ಟು ಸುರಕ್ಷಿತ ಸಂಪರ್ಕದಲ್ಲಿ ಬಳಸಿ.'
@@ -193,172 +198,324 @@ export function translateSpeechError(errCode, isKannada = false, context = {}) {
 }
 
 /**
- * Speech Recognition Controller
- * Manages recognition sessions, interim streaming, permission pre-flighting, and diagnostics.
+ * Safely merge accumulated and newly recognized transcripts without duplication.
+ * Preserves Kannada Unicode, English text, and sentence boundaries.
+ * 
+ * @param {string} base
+ * @param {string} addition
+ * @returns {string}
  */
-class SpeechRecognitionManager {
+export function mergeTranscripts(base = '', addition = '') {
+  const trimmedBase = (base || '').trim();
+  const trimmedAdd = (addition || '').trim();
+  if (!trimmedBase) return trimmedAdd;
+  if (!trimmedAdd) return trimmedBase;
+
+  // If base already contains addition at the very end, do not duplicate
+  if (trimmedBase.endsWith(trimmedAdd)) {
+    return trimmedBase;
+  }
+
+  // Word-level suffix matching to prevent overlapping phrase duplicates
+  const baseWords = trimmedBase.split(/\s+/);
+  const addWords = trimmedAdd.split(/\s+/);
+
+  let maxOverlap = 0;
+  const maxCheck = Math.min(baseWords.length, addWords.length);
+  for (let len = maxCheck; len > 0; len--) {
+    const baseSlice = baseWords.slice(baseWords.length - len).join(' ');
+    const addSlice = addWords.slice(0, len).join(' ');
+    if (baseSlice.toLowerCase() === addSlice.toLowerCase()) {
+      maxOverlap = len;
+      break;
+    }
+  }
+
+  if (maxOverlap > 0) {
+    const nonOverlapping = addWords.slice(maxOverlap).join(' ');
+    return nonOverlapping ? `${trimmedBase} ${nonOverlapping}` : trimmedBase;
+  }
+
+  return `${trimmedBase} ${trimmedAdd}`;
+}
+
+/**
+ * Advanced Continuous Bilingual Speech Recognition Controller
+ * 
+ * Implements:
+ * - Continuous listening (continuous = true, interimResults = true)
+ * - Controlled automatic session restart on unexpected browser cutoff / silence
+ * - Accumulated transcript preservation across session restarts and language changes
+ * - Manual edit synchronization so user typing is not wiped out
+ * - Language switching ('kn-IN' <-> 'en-IN') preserving existing speech history
+ * - Finite retry limits (prevents infinite loops on persistent errors)
+ * - Safe lifecycle destruction for unmount and chatbot closure
+ */
+export class SpeechRecognitionManager {
   constructor() {
     this.recognition = null;
     this.isListening = false;
+    this.desiredListening = false;
+    this.isExplicitlyStopped = true;
     this.currentLanguage = 'kn-IN';
+
+    // Callbacks
     this.onResultCallback = null;
     this.onErrorCallback = null;
     this.onEndCallback = null;
     this.onStartCallback = null;
+    this.onRestartCallback = null;
+
+    // Accumulated and active transcript buffers
+    this.accumulatedFinal = '';
+    this.currentSessionFinal = '';
+    this.interimTranscript = '';
+
+    // Reliability & Restart control
     this.isBrave = false;
+    this.consecutiveRestarts = 0;
+    this.maxRestartsWithoutSpeech = 4;
+    this.restartTimeoutId = null;
+    this.isRestarting = false;
+    this.isStarting = false;
   }
 
   /**
-   * Initialize and start a speech recognition session with pre-flight diagnostics.
+   * Initialize and start a continuous speech recognition session.
    * 
    * @param {object} options
    * @param {'kn-IN'|'en-IN'} [options.language='kn-IN'] - BCP-47 language tag
-   * @param {function} options.onResult - Receives { transcript, isFinal }
-   * @param {function} [options.onError] - Receives { code, message, isBrave }
-   * @param {function} [options.onEnd] - Invoked when recognition stops
+   * @param {string} [options.initialText=''] - Existing text to preserve/append to
+   * @param {function} options.onResult - Receives { transcript, accumulatedFinal, interim, isFinal }
+   * @param {function} [options.onError] - Receives { code, message, isBrave, fatal }
+   * @param {function} [options.onEnd] - Invoked when recording completely stops
    * @param {function} [options.onStart] - Invoked when microphone starts capturing
-   * @returns {Promise<boolean>} true if session successfully initiated
+   * @param {function} [options.onRestart] - Invoked when session automatically reconnects
+   * @returns {Promise<boolean>}
    */
-  async start({ language = 'kn-IN', onResult, onError, onEnd, onStart } = {}) {
-    // 1. Check browser API support
-    const isSupported = isSpeechRecognitionSupported();
-    const isSecure = isSecureOrigin();
-    this.isBrave = await isBraveBrowser();
-
-    logDiagnostic('PRE_FLIGHT_CHECK', {
-      browserSupported: isSupported,
-      isSecureContext: isSecure,
-      isBrave: this.isBrave,
-      isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
-      requestedLanguage: language
-    });
-
-    if (!isSupported) {
-      if (onError) {
-        onError({
-          code: 'UNSUPPORTED_BROWSER',
-          message: translateSpeechError('UNSUPPORTED_BROWSER', language === 'kn-IN')
-        });
-      }
-      return false;
-    }
-
-    if (!isSecure) {
-      if (onError) {
-        onError({
-          code: 'INSECURE_CONTEXT',
-          message: translateSpeechError('INSECURE_CONTEXT', language === 'kn-IN', { isNonSecure: true })
-        });
-      }
-      return false;
-    }
-
-    // 2. Pre-flight microphone permission and device inspection
-    const { permissionState, hasAudioDevice } = await inspectMicrophoneEnvironment();
-    logDiagnostic('HARDWARE_AND_PERMISSION_STATUS', { permissionState, hasAudioDevice });
-
-    if (!hasAudioDevice) {
-      if (onError) {
-        onError({
-          code: 'NO_MICROPHONE_DEVICE',
-          message: translateSpeechError('NO_MICROPHONE_DEVICE', language === 'kn-IN')
-        });
-      }
-      return false;
-    }
-
-    if (permissionState === 'denied') {
-      if (onError) {
-        onError({
-          code: 'not-allowed',
-          message: translateSpeechError('not-allowed', language === 'kn-IN')
-        });
-      }
-      return false;
-    }
-
-    // 3. Prompt user media permission if state is 'prompt'
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia && permissionState === 'prompt') {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Release stream tracks immediately after permission granted
-        stream.getTracks().forEach((track) => track.stop());
-        logDiagnostic('MEDIA_STREAM_PERMISSION_GRANTED');
-      } catch (mediaErr) {
-        logDiagnostic('MEDIA_STREAM_PERMISSION_REJECTED', { name: mediaErr.name });
-        if (mediaErr.name === 'NotAllowedError' || mediaErr.name === 'PermissionDeniedError') {
-          if (onError) {
-            onError({
-              code: 'not-allowed',
-              message: translateSpeechError('not-allowed', language === 'kn-IN')
-            });
-          }
-          return false;
-        }
-      }
-    }
-
-    // 4. Stop any existing session
-    if (this.isListening) {
-      this.stop();
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  async start({
+    language = 'kn-IN',
+    initialText = '',
+    onResult,
+    onError,
+    onEnd,
+    onStart,
+    onRestart
+  } = {}) {
+    if (this.isStarting) return false;
+    this.isStarting = true;
 
     try {
-      this.recognition = new SpeechRecognition();
+      this.desiredListening = true;
+      this.isExplicitlyStopped = false;
+      this.consecutiveRestarts = 0;
       this.currentLanguage = language;
       this.onResultCallback = onResult;
       this.onErrorCallback = onError;
       this.onEndCallback = onEnd;
       this.onStartCallback = onStart;
+      this.onRestartCallback = onRestart;
 
-      // Configure recognition session
-      this.recognition.lang = language;
+      // Seed transcript with any initial text already present in input
+      this.accumulatedFinal = (initialText || '').trim();
+      this.currentSessionFinal = '';
+      this.interimTranscript = '';
+
+      // Clear any pending restart timers
+      this.clearRestartTimer();
+
+      // Stop existing recognition if active
+      if (this.recognition) {
+        try {
+          this.recognition.onend = null;
+          this.recognition.onerror = null;
+          this.recognition.abort();
+        } catch {}
+        this.recognition = null;
+      }
+
+      // 1. Check browser API support
+      const isSupported = isSpeechRecognitionSupported();
+      const isSecure = isSecureOrigin();
+      this.isBrave = await isBraveBrowser();
+
+      logDiagnostic('PRE_FLIGHT_CHECK', {
+        browserSupported: isSupported,
+        isSecureContext: isSecure,
+        isBrave: this.isBrave,
+        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        requestedLanguage: language
+      });
+
+      if (!isSupported) {
+        this.desiredListening = false;
+        this.isExplicitlyStopped = true;
+        if (this.onErrorCallback) {
+          this.onErrorCallback({
+            code: 'UNSUPPORTED_BROWSER',
+            message: translateSpeechError('UNSUPPORTED_BROWSER', language === 'kn-IN'),
+            fatal: true
+          });
+        }
+        return false;
+      }
+
+      if (!isSecure) {
+        this.desiredListening = false;
+        this.isExplicitlyStopped = true;
+        if (this.onErrorCallback) {
+          this.onErrorCallback({
+            code: 'INSECURE_CONTEXT',
+            message: translateSpeechError('INSECURE_CONTEXT', language === 'kn-IN', { isNonSecure: true }),
+            fatal: true
+          });
+        }
+        return false;
+      }
+
+      // 2. Pre-flight microphone permission and device inspection
+      const { permissionState, hasAudioDevice } = await inspectMicrophoneEnvironment();
+      logDiagnostic('HARDWARE_AND_PERMISSION_STATUS', { permissionState, hasAudioDevice });
+
+      if (!hasAudioDevice) {
+        this.desiredListening = false;
+        this.isExplicitlyStopped = true;
+        if (this.onErrorCallback) {
+          this.onErrorCallback({
+            code: 'NO_MICROPHONE_DEVICE',
+            message: translateSpeechError('NO_MICROPHONE_DEVICE', language === 'kn-IN'),
+            fatal: true
+          });
+        }
+        return false;
+      }
+
+      if (permissionState === 'denied') {
+        this.desiredListening = false;
+        this.isExplicitlyStopped = true;
+        if (this.onErrorCallback) {
+          this.onErrorCallback({
+            code: 'not-allowed',
+            message: translateSpeechError('not-allowed', language === 'kn-IN'),
+            fatal: true
+          });
+        }
+        return false;
+      }
+
+      // 3. Prompt user media permission if state is 'prompt'
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia && permissionState === 'prompt') {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((track) => track.stop());
+          logDiagnostic('MEDIA_STREAM_PERMISSION_GRANTED');
+        } catch (mediaErr) {
+          logDiagnostic('MEDIA_STREAM_PERMISSION_REJECTED', { name: mediaErr.name });
+          if (mediaErr.name === 'NotAllowedError' || mediaErr.name === 'PermissionDeniedError') {
+            this.desiredListening = false;
+            this.isExplicitlyStopped = true;
+            if (this.onErrorCallback) {
+              this.onErrorCallback({
+                code: 'not-allowed',
+                message: translateSpeechError('not-allowed', language === 'kn-IN'),
+                fatal: true
+              });
+            }
+            return false;
+          }
+        }
+      }
+
+      return this.initiateRecognitionSession();
+    } finally {
+      this.isStarting = false;
+    }
+  }
+
+  /**
+   * Internal session initiator with event handlers, continuous accumulation and restart logic.
+   * 
+   * @returns {boolean}
+   */
+  initiateRecognitionSession() {
+    if (!this.desiredListening || this.isExplicitlyStopped) {
+      return false;
+    }
+
+    const SpeechRecognition = typeof window !== 'undefined'
+      ? (window.SpeechRecognition || window.webkitSpeechRecognition)
+      : null;
+
+    if (!SpeechRecognition) {
+      return false;
+    }
+
+    try {
+      this.recognition = new SpeechRecognition();
+      this.recognition.lang = this.currentLanguage;
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.maxAlternatives = 1;
 
       this.recognition.onstart = () => {
         this.isListening = true;
+        this.isRestarting = false;
         logDiagnostic('RECOGNITION_SESSION_STARTED', {
           language: this.currentLanguage,
-          isBrave: this.isBrave
+          isBrave: this.isBrave,
+          continuous: true
         });
-        if (this.onStartCallback) this.onStartCallback();
+        if (this.onStartCallback) {
+          this.onStartCallback({
+            language: this.currentLanguage,
+            accumulatedTranscript: this.getFullTranscript()
+          });
+        }
       };
 
       this.recognition.onresult = (event) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
+        let sessionFinal = '';
+        let interimText = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const result = event.results[i];
           const text = result[0]?.transcript || '';
 
           if (result.isFinal) {
-            finalTranscript += text;
+            sessionFinal = mergeTranscripts(sessionFinal, text);
           } else {
-            interimTranscript += text;
+            interimText = (interimText + ' ' + text).trim();
           }
         }
 
-        const combined = (finalTranscript + ' ' + interimTranscript).trim();
+        // On successful speech recognition, reset restart counter
+        if (sessionFinal || interimText) {
+          this.consecutiveRestarts = 0;
+        }
 
-        if (this.onResultCallback && combined) {
+        if (sessionFinal) {
+          this.currentSessionFinal = mergeTranscripts(this.currentSessionFinal, sessionFinal);
+        }
+        this.interimTranscript = interimText;
+
+        const currentFinal = mergeTranscripts(this.accumulatedFinal, this.currentSessionFinal);
+        const combined = interimText ? `${currentFinal} ${interimText}`.trim() : currentFinal;
+
+        if (this.onResultCallback) {
           this.onResultCallback({
             transcript: combined,
-            final: finalTranscript.trim(),
-            interim: interimTranscript.trim(),
-            isFinal: Boolean(finalTranscript) && !interimTranscript
+            accumulatedFinal: currentFinal,
+            interim: interimText,
+            isFinal: Boolean(sessionFinal)
           });
         }
       };
 
       this.recognition.onerror = (event) => {
         const errCode = event.error;
+
         if (errCode === 'aborted') {
-          logDiagnostic('RECOGNITION_ABORTED_BY_USER');
+          logDiagnostic('RECOGNITION_ABORTED');
           return;
         }
 
@@ -366,40 +523,155 @@ class SpeechRecognitionManager {
           errorType: errCode,
           language: this.currentLanguage,
           isBrave: this.isBrave,
-          isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true
+          desiredListening: this.desiredListening,
+          consecutiveRestarts: this.consecutiveRestarts
         });
 
-        const isKn = this.currentLanguage === 'kn-IN';
-        const humanMessage = translateSpeechError(errCode, isKn, {
+        // Fatal errors: Stop immediately and do NOT restart
+        const fatalErrors = [
+          'not-allowed',
+          'service-not-allowed',
+          'PERMISSION_DENIED',
+          'audio-capture',
+          'NO_MICROPHONE_DEVICE',
+          'language-not-supported'
+        ];
+
+        if (fatalErrors.includes(errCode)) {
+          this.desiredListening = false;
+          this.isExplicitlyStopped = true;
+          this.clearRestartTimer();
+          const msg = translateSpeechError(errCode, this.currentLanguage === 'kn-IN', {
+            isBrave: this.isBrave,
+            isOffline: typeof navigator !== 'undefined' ? navigator.onLine === false : false,
+            isNonSecure: !isSecureOrigin()
+          });
+          if (this.onErrorCallback) {
+            this.onErrorCallback({ code: errCode, message: msg, fatal: true });
+          }
+          return;
+        }
+
+        // Network error handling (Brave Shields or offline)
+        if (errCode === 'network') {
+          const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+          // In Brave or offline, abort immediately to prevent infinite restart loop
+          if (this.isBrave || isOffline || this.consecutiveRestarts >= 1) {
+            this.desiredListening = false;
+            this.isExplicitlyStopped = true;
+            this.clearRestartTimer();
+            const msg = translateSpeechError(errCode, this.currentLanguage === 'kn-IN', {
+              isBrave: this.isBrave,
+              isOffline,
+              isNonSecure: !isSecureOrigin()
+            });
+            if (this.onErrorCallback) {
+              this.onErrorCallback({ code: errCode, message: msg, fatal: true });
+            }
+            return;
+          }
+        }
+
+        // no-speech error: In continuous mode, Chrome fires 'no-speech' on silence.
+        // If desiredListening is active, onend will cleanly restart the session.
+        if (errCode === 'no-speech') {
+          if (!this.desiredListening || this.isExplicitlyStopped) {
+            const msg = translateSpeechError('no-speech', this.currentLanguage === 'kn-IN');
+            if (this.onErrorCallback) {
+              this.onErrorCallback({ code: 'no-speech', message: msg, fatal: false });
+            }
+          }
+          return;
+        }
+
+        // Generic error
+        const msg = translateSpeechError(errCode, this.currentLanguage === 'kn-IN', {
           isBrave: this.isBrave,
-          isOffline: typeof navigator !== 'undefined' ? !navigator.onLine : false,
+          isOffline: typeof navigator !== 'undefined' ? navigator.onLine === false : false,
           isNonSecure: !isSecureOrigin()
         });
-
         if (this.onErrorCallback) {
-          this.onErrorCallback({
-            code: errCode,
-            message: humanMessage,
-            isBrave: this.isBrave
-          });
+          this.onErrorCallback({ code: errCode, message: msg, fatal: false });
         }
       };
 
       this.recognition.onend = () => {
-        this.isListening = false;
-        logDiagnostic('RECOGNITION_SESSION_ENDED', { language: this.currentLanguage });
-        if (this.onEndCallback) this.onEndCallback();
+        logDiagnostic('RECOGNITION_SESSION_ENDED', {
+          language: this.currentLanguage,
+          desiredListening: this.desiredListening,
+          isExplicitlyStopped: this.isExplicitlyStopped,
+          consecutiveRestarts: this.consecutiveRestarts
+        });
+
+        // Commit current session's final and any interim text into accumulatedFinal
+        this.commitSessionTranscripts();
+
+        // Check if continuous listening should automatically restart the session
+        if (this.desiredListening && !this.isExplicitlyStopped) {
+          if (this.consecutiveRestarts >= this.maxRestartsWithoutSpeech) {
+            logDiagnostic('MAX_RESTARTS_EXCEEDED', { attempts: this.consecutiveRestarts });
+            this.desiredListening = false;
+            this.isExplicitlyStopped = true;
+            this.isListening = false;
+            const errCode = 'RESTART_LIMIT_REACHED';
+            const msg = this.currentLanguage === 'kn-IN'
+              ? 'ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಅವಧಿ ಮುಕ್ತಾಯಗೊಂಡಿದೆ. ಮುಂದುವರಿಸಲು ಮೈಕ್ರೊಫೋನ್ ಅನ್ನು ಪುನಃ ಒತ್ತಿ ಅಥವಾ ಕೆಳಗೆ ಪ್ರಶ್ನೆ ಟೈಪ್ ಮಾಡಿ.'
+              : 'Voice recognition session timed out. Tap the microphone again to resume or type your question below.';
+            if (this.onErrorCallback) {
+              this.onErrorCallback({ code: errCode, message: msg, fatal: false });
+            }
+            if (this.onEndCallback) this.onEndCallback();
+            return;
+          }
+
+          // Schedule a controlled restart
+          this.consecutiveRestarts++;
+          this.isRestarting = true;
+          this.clearRestartTimer();
+
+          const delay = Math.min(80 * this.consecutiveRestarts, 400);
+          this.restartTimeoutId = setTimeout(() => {
+            if (this.desiredListening && !this.isExplicitlyStopped) {
+              logDiagnostic('AUTO_RESTARTING_SESSION', {
+                attempt: this.consecutiveRestarts,
+                language: this.currentLanguage
+              });
+              if (this.onRestartCallback) {
+                this.onRestartCallback({
+                  attempt: this.consecutiveRestarts,
+                  language: this.currentLanguage
+                });
+              }
+              this.initiateRecognitionSession();
+            }
+          }, delay);
+        } else {
+          // User explicitly stopped or fatal error stopped it
+          this.isListening = false;
+          this.isRestarting = false;
+          if (this.onEndCallback) this.onEndCallback();
+        }
       };
 
       this.recognition.start();
       return true;
     } catch (err) {
+      logDiagnostic('INITIATE_SESSION_EXCEPTION', { message: err.message });
+      if (this.desiredListening && !this.isExplicitlyStopped && this.consecutiveRestarts < this.maxRestartsWithoutSpeech) {
+        this.consecutiveRestarts++;
+        this.restartTimeoutId = setTimeout(() => {
+          this.initiateRecognitionSession();
+        }, 250);
+        return true;
+      }
+
+      this.desiredListening = false;
       this.isListening = false;
-      logDiagnostic('INITIALIZATION_EXCEPTION', { message: err.message });
       if (this.onErrorCallback) {
         this.onErrorCallback({
           code: 'INITIALIZATION_FAILED',
-          message: err.message || 'Could not start microphone session.'
+          message: err.message || 'Could not start microphone session.',
+          fatal: true
         });
       }
       return false;
@@ -407,33 +679,137 @@ class SpeechRecognitionManager {
   }
 
   /**
-   * Stop the active speech recognition session cleanly.
+   * Commit current session finals and interim into accumulatedFinal.
+   */
+  commitSessionTranscripts() {
+    if (this.currentSessionFinal) {
+      this.accumulatedFinal = mergeTranscripts(this.accumulatedFinal, this.currentSessionFinal);
+      this.currentSessionFinal = '';
+    }
+    if (this.interimTranscript) {
+      this.accumulatedFinal = mergeTranscripts(this.accumulatedFinal, this.interimTranscript);
+      this.interimTranscript = '';
+    }
+  }
+
+  /**
+   * Get the full transcript (accumulated final + current interim).
+   * 
+   * @returns {string}
+   */
+  getFullTranscript() {
+    const currentFinal = mergeTranscripts(this.accumulatedFinal, this.currentSessionFinal);
+    return this.interimTranscript
+      ? `${currentFinal} ${this.interimTranscript}`.trim()
+      : currentFinal;
+  }
+
+  /**
+   * Get all finalized text accumulated so far.
+   * 
+   * @returns {string}
+   */
+  getAccumulatedTranscript() {
+    return mergeTranscripts(this.accumulatedFinal, this.currentSessionFinal);
+  }
+
+  /**
+   * Update the accumulated transcript when the citizen edits the text input manually.
+   * Prevents subsequent voice results from wiping out manual user changes.
+   * 
+   * @param {string} text
+   */
+  setAccumulatedTranscript(text) {
+    this.accumulatedFinal = (text || '').trim();
+    this.currentSessionFinal = '';
+    this.interimTranscript = '';
+  }
+
+  /**
+   * Switch recognition language mid-session ('kn-IN' <-> 'en-IN')
+   * preserving the accumulated transcript across sessions.
+   * 
+   * @param {'kn-IN'|'en-IN'} newLang
+   */
+  switchLanguage(newLang) {
+    if (this.currentLanguage === newLang) return;
+    this.currentLanguage = newLang;
+    logDiagnostic('SWITCH_LANGUAGE', { newLanguage: newLang });
+
+    if (this.isListening || this.desiredListening) {
+      this.commitSessionTranscripts();
+      this.clearRestartTimer();
+      if (this.recognition) {
+        try {
+          this.recognition.onend = null;
+          this.recognition.stop();
+        } catch {}
+        this.recognition = null;
+      }
+      this.initiateRecognitionSession();
+    }
+  }
+
+  /**
+   * Stop the active speech recognition session cleanly and prevent auto-restarts.
    */
   stop() {
+    this.desiredListening = false;
+    this.isExplicitlyStopped = true;
+    this.clearRestartTimer();
+    this.commitSessionTranscripts();
     if (this.recognition) {
       try {
         this.recognition.stop();
-      } catch {
-        // Ignore if already stopped
-      }
+      } catch {}
       this.recognition = null;
     }
     this.isListening = false;
+    this.isRestarting = false;
+    logDiagnostic('RECOGNITION_STOPPED_BY_USER');
   }
 
   /**
    * Abort the active session immediately without dispatching remaining events.
    */
   abort() {
+    this.desiredListening = false;
+    this.isExplicitlyStopped = true;
+    this.clearRestartTimer();
     if (this.recognition) {
       try {
         this.recognition.abort();
-      } catch {
-        // Ignore if already aborted
-      }
+      } catch {}
       this.recognition = null;
     }
     this.isListening = false;
+    this.isRestarting = false;
+    logDiagnostic('RECOGNITION_ABORTED_BY_USER');
+  }
+
+  /**
+   * Safely clean up instance state on component unmount or chatbot closure.
+   */
+  destroy() {
+    this.stop();
+    this.onResultCallback = null;
+    this.onErrorCallback = null;
+    this.onEndCallback = null;
+    this.onStartCallback = null;
+    this.onRestartCallback = null;
+    this.accumulatedFinal = '';
+    this.currentSessionFinal = '';
+    this.interimTranscript = '';
+  }
+
+  /**
+   * Clear any scheduled auto-restart timer.
+   */
+  clearRestartTimer() {
+    if (this.restartTimeoutId) {
+      clearTimeout(this.restartTimeoutId);
+      this.restartTimeoutId = null;
+    }
   }
 
   /**
@@ -443,6 +819,15 @@ class SpeechRecognitionManager {
    */
   getIsListening() {
     return this.isListening;
+  }
+
+  /**
+   * Check if user has requested listening to be active.
+   * 
+   * @returns {boolean}
+   */
+  getDesiredListening() {
+    return this.desiredListening;
   }
 
   /**
